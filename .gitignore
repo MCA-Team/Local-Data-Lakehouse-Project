@@ -12,8 +12,8 @@ postgresql-volume/*
 mongodb-volume/*
 *.ipynb
 minio.license
-minio/data/*
-minio/certs/*
+minio-volumes/data/*
+minio-volumes/certs/*
 
 # Windows system files
 Thumbs.db
