@@ -91,6 +91,7 @@ x-airflow-common:
 services:
   postgres:
     image: postgres:15
+    hostname: local-lakehouse-postgres
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -125,6 +126,7 @@ services:
     ports:
       - "8080:8080"
     container_name: airflow-webserver
+    hostname: local-lakehouse-airflow-webserver
     image: airflow-webserver
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
@@ -141,6 +143,7 @@ services:
   airflow-scheduler:
     <<: *airflow-common
     command: scheduler
+    hostname: local-lakehouse-airflow-scheduler
     container_name: airflow-scheduler
     image: airflow-scheduler
     healthcheck:
@@ -312,6 +315,7 @@ services:
   minio-aistor:
     image: quay.io/minio/aistor/minio
     container_name: aistor-server
+    hostname: local-lakehouse-minio
     restart: always
     ports:
       - "9008:9008"
