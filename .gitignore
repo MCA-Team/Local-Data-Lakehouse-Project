@@ -10,10 +10,10 @@ venv/
 .env
 postgresql-volume/*
 mongodb-volume/*
-*.ipynb
 minio.license
 minio-volumes/data/*
 minio-volumes/certs/*
+data/*
 
 # Windows system files
 Thumbs.db
