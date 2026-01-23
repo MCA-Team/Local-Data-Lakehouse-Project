@@ -46,5 +46,6 @@ with DAG(
         python_callable=etl_functions.transform_bronze_data_to_silver
     )
 
-    checking_raw_json_files_existence >> extract >> [transform, remove_local_files]
+    checking_raw_json_files_existence >> extract >> remove_local_files
+    transform
     # extract >> transform
