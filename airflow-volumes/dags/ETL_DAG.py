@@ -2,7 +2,7 @@ from airflow import DAG
 from airflow.sensors.filesystem import FileSensor
 from airflow.operators.python import PythonOperator
 from airflow.operators.bash import BashOperator
-import logging
+import logging, tomllib
 from datetime import datetime
 from utilities import etl_functions
 
@@ -19,6 +19,9 @@ with DAG(
     description="Through a medallion architecture, this DAG describes the data ETL process",
     default_args = def_args
 ) as dag:
+
+    with open("dev-config.toml", "rb") as config_file:
+        data = tomllib.load(config_file)
 
     # Task: Check for the existence of raw JSON files in the local filesystem before extraction and dumping to bronze zone
     checking_raw_json_files_existence = FileSensor(
