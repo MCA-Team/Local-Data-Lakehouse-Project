@@ -17,15 +17,28 @@ def extract_raw_json_files_to_minio_bronze(ds:str):
     logging.info(f"Partition path is: {partition_path}")
 
     s3_hook = S3Hook(aws_conn_id="minio_conn")  # Connection pointing to MinIO container and have to be configured through Airflow UI > Admin > Connections
+
+    # Data idempotency and consistency: Clear existing files in the target partition    path in MinIO bronze bucket
+    if s3_hook.list_keys(bucket_name='bronze', prefix=f"{partition_path}") is not None:
+        s3_hook.delete_objects(bucket='bronze', keys=s3_hook.list_keys(bucket_name='bronze', prefix=f"{partition_path}"))
+        logging.info(f"Deleted existing files in MinIO bronze bucket at prefix: {partition_path}")
+
     for file in os.listdir("/opt/airflow/local-data/"):
         if os.path.isfile(os.path.join("/opt/airflow/local-data/", file)) and file.endswith(".json"):
             logging.info(f"Uploading file /opt/airflow/local-data/{file} to MinIO bronze bucket...")
             s3_hook.load_file(
                 filename=f"/opt/airflow/local-data/{file}",
-                key=f"{partition_path}/json/{file}",
+                key=f"{partition_path}/{file}",
                 bucket_name="bronze", 
                 replace=True)
-            logging.info(f"File bronze/{partition_path}/json/{file} successfully uploaded to MinIO bronze bucket.")
+            logging.info(f"File bronze/{partition_path}/{file} successfully uploaded to MinIO bronze bucket.")
+
+
+
+
+# ===============================================================================================================================================
+
+
 
 
 # Transform function to process data from bronze to silver zone
@@ -47,9 +60,14 @@ def transform_bronze_data_to_silver(ds:str):
     files_list = s3_hook.list_keys(bucket_name='bronze', prefix=f"{partition_path}")
     logging.info(f"Bronze files to be transformed: {files_list}")
 
+    # Data idempotency and consistency: Clear existing files in the target partition    path in MinIO bronze bucket
+    if s3_hook.list_keys(bucket_name='silver', prefix=f"{partition_path}") is not None:
+        s3_hook.delete_objects(bucket='silver', keys=s3_hook.list_keys(bucket_name='silver', prefix=f"{partition_path}"))
+        logging.info(f"Deleted existing files in MinIO silver bucket at prefix: {partition_path}/")
+
     with duckdb.connect(config = {
-                                    "s3_access_key_id": '', #dotenv_values(credentials_file_path)["MINIO_ROOT_USER"],
-                                    "s3_secret_access_key": '', #dotenv_values(credentials_file_path)["MINIO_ROOT_PASSWORD"],
+                                    "s3_access_key_id": 'airflow', #dotenv_values(credentials_file_path)["MINIO_ROOT_USER"],
+                                    "s3_secret_access_key": 'miniopasswd', #dotenv_values(credentials_file_path)["MINIO_ROOT_PASSWORD"],
                                     "s3_endpoint": "minio-aistor:9008",     # MinIO service name as defined in docker-compose file followed by ":{MiniIO_API_Port}" (e.g., "minio:9000"). Do not use "http://" or "https://", and do not use the MinIO Console port.
                                     "s3_url_style": "path",     # Use "path" URLs style for MinIO and "vhost" for AWS S3
                                     "s3_use_ssl": "false"       # MinIO by default does not use SSL; set to "true" if SSL is configured
@@ -63,13 +81,18 @@ def transform_bronze_data_to_silver(ds:str):
 
         for bronze_file_path in files_list:
             # Transformation logic goes here
-            apply_transformations_and_write_parquet(duckdb_connection=conn, 
+            apply_transformations_and_write_parquet(duckdb_connection=conn,
                                                     fileToTransform_path=bronze_file_path, 
                                                     partition_path=partition_path
                                                     )
-            logging.info("Transformed data written to MinIO Silver bucket in Parquet format at : {s3_hook.getlist}")
 
     logging.info("Data transformation from bronze to silver completed.")
+
+
+
+
+# ===============================================================================================================================================
+
 
 
 def apply_transformations_and_write_parquet(duckdb_connection: duckdb.DuckDBPyConnection, fileToTransform_path: str, partition_path: str) -> None:
@@ -82,23 +105,43 @@ def apply_transformations_and_write_parquet(duckdb_connection: duckdb.DuckDBPyCo
     Returns:
         None
     """
-    file_read = duckdb_connection.read_json(f"s3://bronze/{fileToTransform_path}")
-    file_read\
-        .select(
-                    duckdb.ColumnExpression("transaction_id").isnotnull().alias("transaction_id"),      # Ensures transaction_id is not null
-                    duckdb.ColumnExpression("date").cast("TIMESTAMP").alias("transaction_date"),    # Casts date to TIMESTAMP
-                    duckdb.ColumnExpression("customer.name").alias("client_name"),
-                    duckdb.ColumnExpression("customer.loyalty_member").alias("client_is_loyalty_member"),
-                    duckdb.SQLExpression("UNNEST(basket.items).product_name").alias("item_product_name"),
-                    duckdb.SQLExpression("UNNEST(basket.items).quantity").alias("quantity"),
-                    duckdb.SQLExpression("UNNEST(basket.items).unit_price").cast("DOUBLE").alias("item_unit_price"),       # Casts unit_price to DOUBLE
-                    duckdb.SQLExpression("UNNEST(basket.items).total_amount").cast("DOUBLE").alias("total_amount"),     # Casts total_amount to DOUBLE
-                    duckdb.ColumnExpression("currency"),
-                    duckdb.ColumnExpression("payment_method")
-                )\
-        .write_parquet(
-                        f"s3://silver/{partition_path}/{fileToTransform_path.split('/')[-1].replace('.json', '.parquet')}", 
-                        compression="SNAPPY",
-                        overwrite=True
-                    )
+
+    source_file = duckdb_connection.read_json(f"s3://bronze/{fileToTransform_path}")
+    final_file = source_file\
+                            .select(
+                                        duckdb.ColumnExpression("transaction_id").cast("VARCHAR").alias("transaction_id"),                      # Casts transaction_id to VARCHAR
+                                        duckdb.ColumnExpression("date").cast("TIMESTAMP").alias("transaction_date"),                            # Casts transaction_date to TIMESTAMP
+                                        duckdb.ColumnExpression("customer.name").cast("VARCHAR").alias("client_name"),                          # Casts client_name to VARCHAR
+                                        duckdb.SQLExpression("UNNEST(basket.items).product_name").cast("VARCHAR").alias("item_product_name"),   # Casts item_product_name to VARCHAR
+                                        duckdb.SQLExpression("UNNEST(basket.items).quantity").cast("UINTEGER").alias("item_quantity"),          # Casts item_quantity to UINTEGER (Unsigned Integer)  
+                                        duckdb.SQLExpression("UNNEST(basket.items).unit_price").cast("DOUBLE").alias("item_unit_price"),        # Casts item_unit_price to DOUBLE
+                                        duckdb.SQLExpression("UNNEST(basket.items).total_amount").cast("DOUBLE").alias("total_amount"),         # Casts total_amount to DOUBLE
+                                        duckdb.ColumnExpression("currency").cast("VARCHAR").alias("transaction_currency"),                      # Casts transaction_currency to VARCHAR
+                                        duckdb.ColumnExpression("payment_method").cast("VARCHAR").alias("payment_method")                       # Casts payment_method to VARCHAR
+                                    )\
+                            .filter(duckdb.ColumnExpression("transaction_id").isnotnull())  # Ensures transaction_id is not null
+
+    logging.info("Data verification before writting in Silver bucket...")
+
+    type_validator ={column_name:type_name for column_name, type_name in zip(final_file.columns, final_file.types)}
+
+    assert final_file.filter(duckdb.ColumnExpression("transaction_id").isnull()).shape[0] == 0, "Transformed data contains null values for 'transaction_id' column."
+    assert  type_validator["transaction_id"] == "VARCHAR", "Data type mismatch for 'transaction_id' column."
+    assert  type_validator["transaction_date"] == "TIMESTAMP", "Data type mismatch for 'transaction_date' column."
+    assert  type_validator["client_name"] == "VARCHAR", "Data type mismatch for 'client_name' column."
+    assert  type_validator["item_product_name"] == "VARCHAR", "Data type mismatch for 'item_product_name' column."
+    assert  type_validator["item_quantity"] == "UINTEGER", "Data type mismatch for 'item_quantity' column."
+    assert  type_validator["item_unit_price"] == "DOUBLE", "Data type mismatch for 'item_unit_price' column."
+    assert  type_validator["total_amount"] == "DOUBLE", "Data type mismatch for 'total_amount' column."
+    assert  type_validator["transaction_currency"] == "VARCHAR", "Data type mismatch for 'transaction_currency' column."
+    assert  type_validator["payment_method"] == "VARCHAR", "Data type mismatch for 'payment_method' column."
+    
+    logging.info("Data verification completed successfully. Writing transformed data to MinIO Silver bucket...")
+
+    final_file.write_parquet(
+                                f"s3://silver/{partition_path}/{fileToTransform_path.split('/')[-1].replace('.json', '.parquet')}", 
+                                compression="SNAPPY",
+                                overwrite=True
+                            )
+    logging.info(f"Transformed data written to MinIO Silver bucket in Parquet format at : s3://silver/{partition_path}/{fileToTransform_path.split('/')[-1].replace('.json', '.parquet')}")
     
