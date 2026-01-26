@@ -1,0 +1,7 @@
+[DAG]
+dag_name = ""
+
+[STORAGE]
+bronze_bucket_name = "bronze"
+silver_bucket_name = "silver"
+gold_bucket_name = "gold"
