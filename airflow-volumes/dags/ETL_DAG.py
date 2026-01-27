@@ -17,7 +17,6 @@ config = etl_functions.load_config("dags/utilities/dev-config.toml")
 def_args = {
     "owner": config["DAG"]["owner"],
     "retries": config["DAG"]["retries_number"],
-    "catchup": False, #bool(config["DAG"]["catchup"]),  
     "start_date": datetime(int(config["DAG"]["start_date"].split("-")[0]),
                            int(config["DAG"]["start_date"].split("-")[1]),
                            int(config["DAG"]["start_date"].split("-")[2])),
@@ -29,6 +28,7 @@ def_args = {
 with DAG(
     dag_id = config["DAG"]["dag_id"],
     description=config["DAG"]["dag_description"],
+    catchup=config["DAG"]["catchup"],
     default_args = def_args
 ) as dag:
 
@@ -37,7 +37,7 @@ with DAG(
     # Task: Check for the existence of raw JSON files in the local filesystem before extraction and dumping to bronze zone
     checking_raw_json_files_existence = FileSensor(
             task_id="raw_json_files_availabilty_verification",
-            fs_conn_id="fs_conn",   # Connection pointing to /opt/airflow/local-data/ and have to be configured through Airflow UI > Admin > Connections
+            fs_conn_id="filesystem_conn",   # Connection pointing to /opt/airflow/local-data/ and have to be configured through Airflow UI > Admin > Connections
             filepath="sales_*.json",
             poke_interval=config["TASKS"]["checking_raw_json_files_existence_poke_interval"],
             timeout=config["TASKS"]["checking_raw_json_files_existence_timeout"],
