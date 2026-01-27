@@ -1,7 +1,28 @@
 [DAG]
-dag_name = ""
+dag_id = "Local_data_lakehouse_ELT_pipeline"
+dag_description = "A DAG for processing data in a local data lakehouse."
+owner = "MCA_data_engineering_team"
+retries_number = 5
+catchup = false
+start_date = "2026-01-01"   # YYYY-MM-DD format (Example: 2024-12-21)
+schedule = "@daily"  # A cron expression or Airflow preset (e.g., "@daily", "@hourly")
+
 
 [STORAGE]
+airflow_aws_connection_id = "minio_conn"
 bronze_bucket_name = "bronze"
 silver_bucket_name = "silver"
+silver_parquet_files_compression_mode="SNAPPY"
 gold_bucket_name = "gold"
+source_dir = "/opt/airflow/local-data"
+minio_s3_api_port = 9008
+minio_docker_service_name = "minio-aistor"
+duckdb_s3_url_style_config_param = "path"
+duckdb_s3_use_ssl_config_param = "false"
+
+[TASKS]
+fileSensor_connection_id = "fs_conn"
+checking_raw_json_files_existence_poke_interval = 10
+checking_raw_json_files_existence_timeout = 30
+checking_raw_json_files_existence_file_pattern = "sales_*"
+checking_raw_json_files_existence_file_path = "/opt/airflow/local-data/"
