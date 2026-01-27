@@ -5,6 +5,16 @@ from typing import Any
 import duckdb, os, logging, functools, tomllib
 
 
+
+########################################## CONSTANTS ##########################################
+
+CONFIG_PATH = Path(__file__).parent / "utilities" / "dev-config.toml"
+
+
+
+
+########################################## FUNCTIONS ##########################################
+
 # Extract function to load raw JSON files from local directory to MinIO bronze bucket
 def extract_raw_json_files_to_minio_bronze(toml_config:dict[str, Any], ds:str):
     """
@@ -15,14 +25,14 @@ def extract_raw_json_files_to_minio_bronze(toml_config:dict[str, Any], ds:str):
     Returns:
         None
     """
-    partition_path:str = ds.replace("-", "/").apply()
+    partition_path:str = get_partition_path_blueprint(ds)
     logging.info(f"Partition path is: {partition_path}")
 
     s3_hook = S3Hook(aws_conn_id=toml_config["STORAGE"]["airflow_aws_connection_id"])  # Connection pointing to MinIO container and have to be configured through Airflow UI > Admin > Connections
     files_in_bronze_partition_path = s3_hook.list_keys(bucket_name=toml_config["STORAGE"]["bronze_bucket_name"],
                                                        prefix=f"{partition_path}")
     # Data idempotency and consistency: Clear (if exist) files in the target partition path in MinIO bronze bucket
-    if files_in_bronze_partition_path is not None:
+    if len(files_in_bronze_partition_path) > 0:
         s3_hook.delete_objects(bucket=toml_config["STORAGE"]["bronze_bucket_name"], 
                                keys=files_in_bronze_partition_path)
         logging.info(f"Deleted existing files in MinIO bronze bucket at prefix: {partition_path}")
@@ -58,47 +68,46 @@ def transform_bronze_data_to_silver(toml_config:dict[str, Any], ds:str):
     Returns:
         None
     """
-    partition_path:str = ds.replace("-", "/")
+    partition_path:str = get_partition_path_blueprint(ds)
 
     logging.info("Transforming data from Bronze to Silver...")
 
-    # Initialize S3Hook to interact with MinIO Bronze bucket and list targeted files
+    # Initialize S3Hook to interact with MinIO Bronze bucket and list targeted files to transform
     s3_hook = S3Hook(aws_conn_id=toml_config["STORAGE"]["airflow_aws_connection_id"])  # Connection pointing to MinIO container and have to be configured through Airflow UI > Admin > Connections
     files_to_transform_list = s3_hook.list_keys(bucket_name=toml_config["STORAGE"]["bronze_bucket_name"], prefix=f"{partition_path}")
     logging.info(f"Bronze files to be transformed: {files_to_transform_list}")
 
     # Data idempotency and consistency: Clear existing files in the target partition    path in MinIO bronze bucket
-    if s3_hook.list_keys(bucket_name=toml_config["STORAGE"]["silver_bucket_name"], prefix=f"{partition_path}") is not None:
+    files_in_silver_partition_path = s3_hook.list_keys(bucket_name=toml_config["STORAGE"]["silver_bucket_name"], 
+                                                       prefix=f"{partition_path}")
+    if len(files_in_silver_partition_path) > 0:
         s3_hook.delete_objects(bucket=toml_config["STORAGE"]["silver_bucket_name"], 
-                                keys=s3_hook.list_keys(bucket_name=toml_config["STORAGE"]["silver_bucket_name"], 
-                                prefix=f"{partition_path}"))
-        logging.info(f"Deleted existing files in MinIO silver bucket at prefix: {partition_path}/")
+                                keys=files_in_silver_partition_path)
+        logging.info(f"Deleted existing files in MinIO silver Bucket at prefix: {partition_path}/")
 
+    # Opening an in-memory connection to DuckDB while setting up s3 config parameters 
     with duckdb.connect(config = {
                                     "s3_access_key_id": dotenv_values("dags/utilities/.env")["MINIO_ROOT_USER"],
                                     "s3_secret_access_key": dotenv_values("dags/utilities/.env")["MINIO_ROOT_PASSWORD"],
                                     "s3_endpoint": f"{toml_config["STORAGE"]["minio_docker_service_name"]}:{toml_config["STORAGE"]["minio_s3_api_port"]}",     # MinIO service name as defined in docker-compose file followed by ":{MiniIO_API_Port}" (e.g., "minio:9000"). Do not use "http://" or "https://", and do not use the MinIO Console port.
-                                    "s3_url_style": "path",     # Use "path" URLs style for MinIO and "vhost" for AWS S3
-                                    "s3_use_ssl": "false"       # MinIO by default does not use SSL; set to "true" if SSL is configured
+                                    "s3_url_style": toml_config["STORAGE"]["duckdb_s3_url_style_config_param"],     # Use "path" URLs style for MinIO and "vhost" for AWS S3
+                                    "s3_use_ssl": toml_config["STORAGE"]["duckdb_s3_use_ssl_config_param"]       # MinIO by default does not use SSL; set to "true" if SSL is configured
                                 }
     ) as conn:
-        # Ensure httpfs extension is installed and loaded for S3 interactions
+        # Ensure httpfs extension is installed and loaded for interactions between MinIO s3 API and DuckDB
         if conn.sql("SELECT installed FROM duckdb_extensions() where extension_name='httpfs' AND installed='true'").shape[0] == 0:
             conn.execute("INSTALL httpfs;")
         if conn.sql("SELECT loaded FROM duckdb_extensions() where extension_name='httpfs' AND loaded='true'").shape[0] == 0:
             conn.execute("LOAD httpfs;")
 
-        for bronze_file_path in files_list:
-            # Transformation logic goes here
-            apply_transformations_and_write_parquet(
-                                                    toml_config=toml_config,
+        # Transformation logic goes here
+        for bronze_file_path in files_to_transform_list:
+            apply_transformations_and_write_parquet(toml_config=toml_config,
                                                     duckdb_connection=conn,
                                                     fileToTransform_path=bronze_file_path, 
-                                                    partition_path=partition_path
-                                                    )
-
-    logging.info("Data transformation from bronze to silver completed.")
-
+                                                    partition_path=partition_path)
+            
+    logging.info("Data transformation from Bronze to Silver completed.")
 
 
 
@@ -121,9 +130,11 @@ def apply_transformations_and_write_parquet(toml_config:dict[str, Any],
         None
     """
 
-    source_file = duckdb_connection.read_json(f"s3://{toml_config['STORAGE']['bronze_bucket_name']}/{fileToTransform_path}")
-    final_file = source_file\
-                            .select(
+    fileToTransform = duckdb_connection.read_json(f"s3://{toml_config['STORAGE']['bronze_bucket_name']}/{fileToTransform_path}")
+
+    # Transformations: type casting, columns flatening, filtering
+    final_file = fileToTransform\
+                                .select(
                                         duckdb.ColumnExpression("transaction_id").cast("VARCHAR").alias("transaction_id"),                      # Casts transaction_id to VARCHAR
                                         duckdb.ColumnExpression("date").cast("TIMESTAMP").alias("transaction_date"),                            # Casts transaction_date to TIMESTAMP
                                         duckdb.ColumnExpression("customer.name").cast("VARCHAR").alias("client_name"),                          # Casts client_name to VARCHAR
@@ -133,9 +144,10 @@ def apply_transformations_and_write_parquet(toml_config:dict[str, Any],
                                         duckdb.SQLExpression("UNNEST(basket.items).total_amount").cast("DOUBLE").alias("total_amount"),         # Casts total_amount to DOUBLE
                                         duckdb.ColumnExpression("currency").cast("VARCHAR").alias("transaction_currency"),                      # Casts transaction_currency to VARCHAR
                                         duckdb.ColumnExpression("payment_method").cast("VARCHAR").alias("payment_method")                       # Casts payment_method to VARCHAR
-                                    )\
-                            .filter(duckdb.ColumnExpression("transaction_id").isnotnull())  # Ensures transaction_id is not null
+                                        )\
+                                .filter(duckdb.ColumnExpression("transaction_id").isnotnull())  # Ensures transaction_id is not null
 
+    # Ensuring all transformations went well and the final data is as identical as the excepted result
     logging.info("Data verification before writting in Silver bucket...")
 
     type_validator ={column_name:type_name for column_name, type_name in zip(final_file.columns, final_file.types)}
@@ -153,12 +165,17 @@ def apply_transformations_and_write_parquet(toml_config:dict[str, Any],
     
     logging.info("Data verification completed successfully. Writing transformed data to MinIO Silver bucket...")
 
+    # Writting of the final data into Silver bucket
     final_file.write_parquet(
                                 f"s3://{toml_config['STORAGE']['silver_bucket_name']}/{partition_path}/{fileToTransform_path.split('/')[-1].replace('.json', '.parquet')}", 
-                                compression="SNAPPY",
+                                compression=toml_config['STORAGE']['silver_parquet_files_compression_mode'],
                                 overwrite=True
                             )
     logging.info(f"Transformed data written to MinIO Silver bucket in Parquet format at : s3://{toml_config['STORAGE']['silver_bucket_name']}/{partition_path}/{fileToTransform_path.split('/')[-1].replace('.json', '.parquet')}")
+
+
+
+# ===============================================================================================================================================
 
 
 
@@ -167,9 +184,9 @@ def data_from_silver_to_gold():
 
 
 
-# Load configuration from the TOML file
+# ===============================================================================================================================================
 
-CONFIG_PATH = Path(__file__).parent / "utilities" / "dev-config.toml"
+
 
 @functools.cache
 def load_config(toml_file_path: str = CONFIG_PATH) -> dict[str, Any]:
@@ -183,3 +200,29 @@ def load_config(toml_file_path: str = CONFIG_PATH) -> dict[str, Any]:
     logging.info(f"Print: {CONFIG_PATH}")
     with open(toml_file_path, "rb") as config_file:
         return tomllib.load(config_file)
+    
+
+
+# ===============================================================================================================================================
+
+
+
+def get_partition_path_blueprint(execution_date:str) ->str:
+    """
+    Loads the configuration from a TOML file.
+    Args:
+        execution_date (str): The DAG run's execution date in 'YYYY-MM-DD' format. Automatically passed by Airflow.
+    Returns:
+        str: A string following this format: "year=YYYY/month=MM/day=DD" (based on values of the execution_date parameter)
+    """
+    partition_path:list[str] = execution_date.split("-")
+    partition_path[0] = ''.join(("year=", partition_path[0]))
+    partition_path[1] = ''.join(("month=", partition_path[1]))
+    partition_path[2] = ''.join(("day=", partition_path[2]))
+
+    return '/'.join(partition_path)
+
+
+def create_FileSensor_connection_informations() -> None:
+
+    pass
