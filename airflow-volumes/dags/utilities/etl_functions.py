@@ -213,7 +213,49 @@ def data_from_silver_to_gold(toml_config:dict[str, Any], ds:str) -> None:
             conn.execute("LOAD httpfs;")
 
         # Transformation logic goes here
+        for silver_file_path in files_to_transform_list:
+            gold_layer_processing(toml_config=toml_config,
+                                duckdb_connection=conn,
+                                fileToTransform_path=silver_file_path, 
+                                partition_path=partition_path)
 
+
+def gold_layer_processing(toml_config:dict[str, Any], 
+                        duckdb_connection: duckdb.DuckDBPyConnection, 
+                        fileToTransform_path: str, 
+                        partition_path: str) -> None:
+    """
+    Applies necessary transformations to the sales data and writes it to MinIO silver bucket in Parquet format.
+    Args:
+        toml_config (dict[str, Any]): The TOML configuration dictionary.
+        duckdb_connection (duckdb.DuckDBPyConnection): The DuckDB connection object.
+        fileToTransform_path (str): The path of the file to transform within the bronze bucket.
+        partition_path (str): The Silver final file partition path based on the Airflow execution date.
+    Returns:
+        None
+    """
+    fileToTransform = duckdb_connection.sql( f"""
+                                                SELECT transaction_id, \
+                                                        transaction_date::DATE AS transaction_date, \
+                                                        client_name, 
+                                                        item_product_name,  \
+                                                        item_quantity,  \
+                                                        item_unit_price,  \
+                                                        total_amount,  \
+                                                        transaction_currency,  \
+                                                        payment_method,  \
+                                                FROM read_parquet(s3://{toml_config['STORAGE']['silver_bucket_name']}/{fileToTransform_path})
+                                                """)
+
+    # Each day total revenue: Sum of total_amount aggregate per day
+    total_revenue = fileToTransform\
+                            .aggregate(
+                                aggr_expr="transaction_date, SUM(total_amount)::DOUBLE AS total_amount_per_day", 
+                                group_expr="transaction_date")
+    
+    # Each day total number of orders
+    order_count = 1
+    
 
 
 # ===============================================================================================================================================
