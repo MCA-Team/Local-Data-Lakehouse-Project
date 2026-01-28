@@ -77,7 +77,7 @@ def transform_bronze_data_to_silver(toml_config:dict[str, Any], ds:str):
     files_to_transform_list = s3_hook.list_keys(bucket_name=toml_config["STORAGE"]["bronze_bucket_name"], prefix=f"{partition_path}")
     logging.info(f"Bronze files to be transformed: {files_to_transform_list}")
 
-    # Data idempotency and consistency: Clear existing files in the target partition    path in MinIO bronze bucket
+    # Data idempotency and consistency: Clear existing files in the target partition    path in MinIO Silver bucket
     files_in_silver_partition_path = s3_hook.list_keys(bucket_name=toml_config["STORAGE"]["silver_bucket_name"], 
                                                        prefix=f"{partition_path}")
     if len(files_in_silver_partition_path) > 0:
@@ -179,8 +179,40 @@ def apply_transformations_and_write_parquet(toml_config:dict[str, Any],
 
 
 
-def data_from_silver_to_gold():
-    pass
+def data_from_silver_to_gold(toml_config:dict[str, Any], ds:str) -> None:
+    partition_path:str = get_partition_path_blueprint(ds)
+
+    logging.info("Transforming data from Silver to Gold...")
+
+    # Initialize S3Hook to interact with MinIO Silver bucket and list targeted files to transform
+    s3_hook = S3Hook(aws_conn_id=toml_config["STORAGE"]["airflow_aws_connection_id"])  # Connection pointing to MinIO container and have to be configured through Airflow UI > Admin > Connections
+    files_to_transform_list = s3_hook.list_keys(bucket_name=toml_config["STORAGE"]["silver_bucket_name"], prefix=f"{partition_path}")
+    logging.info(f"Silver files to be transformed: {files_to_transform_list}")
+
+    # Data idempotency and consistency: Clear existing files in the target partition    path in MinIO Gold bucket
+    files_in_silver_partition_path = s3_hook.list_keys(bucket_name=toml_config["STORAGE"]["gold_bucket_name"], 
+                                                       prefix=f"{partition_path}")
+    if len(files_in_silver_partition_path) > 0:
+        s3_hook.delete_objects(bucket=toml_config["STORAGE"]["gold_bucket_name"], 
+                                keys=files_in_silver_partition_path)
+        logging.info(f"Deleted existing files in MinIO Gold Bucket at prefix: {partition_path}/")
+
+    # Opening an in-memory connection to DuckDB while setting up s3 config parameters 
+    with duckdb.connect(config = {
+                                    "s3_access_key_id": dotenv_values("dags/utilities/.env")["MINIO_ROOT_USER"],
+                                    "s3_secret_access_key": dotenv_values("dags/utilities/.env")["MINIO_ROOT_PASSWORD"],
+                                    "s3_endpoint": f"{toml_config["STORAGE"]["minio_docker_service_name"]}:{toml_config["STORAGE"]["minio_s3_api_port"]}",     # MinIO service name as defined in docker-compose file followed by ":{MiniIO_API_Port}" (e.g., "minio:9000"). Do not use "http://" or "https://", and do not use the MinIO Console port.
+                                    "s3_url_style": toml_config["STORAGE"]["duckdb_s3_url_style_config_param"],     # Use "path" URLs style for MinIO and "vhost" for AWS S3
+                                    "s3_use_ssl": toml_config["STORAGE"]["duckdb_s3_use_ssl_config_param"]       # MinIO by default does not use SSL; set to "true" if SSL is configured
+                                }
+    ) as conn:
+        # Ensure httpfs extension is installed and loaded for interactions between MinIO s3 API and DuckDB
+        if conn.sql("SELECT installed FROM duckdb_extensions() where extension_name='httpfs' AND installed='true'").shape[0] == 0:
+            conn.execute("INSTALL httpfs;")
+        if conn.sql("SELECT loaded FROM duckdb_extensions() where extension_name='httpfs' AND loaded='true'").shape[0] == 0:
+            conn.execute("LOAD httpfs;")
+
+        # Transformation logic goes here
 
 
 
