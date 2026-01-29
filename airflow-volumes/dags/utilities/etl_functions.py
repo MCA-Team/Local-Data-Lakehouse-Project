@@ -250,11 +250,18 @@ def gold_layer_processing(toml_config:dict[str, Any],
     # Each day total revenue: Sum of total_amount aggregate per day
     total_revenue = fileToTransform\
                             .aggregate(
-                                aggr_expr="transaction_date, SUM(total_amount)::DOUBLE AS total_amount_per_day", 
-                                group_expr="transaction_date")
+                                aggr_expr="transaction_date, SUM(total_amount)::DECIMAL(10,3) AS total_revenue", 
+                                group_expr="transaction_date"
+                                )
     
     # Each day total number of orders
-    order_count = 1
+    order_count = fileToTransform\
+                            .aggregate(
+                                aggr_expr="transaction_date, COUNT(DISTINCT transaction_id) AS order_count", 
+                                group_expr="transaction_date"
+                                )
+    
+    # avg_order_value : 
     
 
 
