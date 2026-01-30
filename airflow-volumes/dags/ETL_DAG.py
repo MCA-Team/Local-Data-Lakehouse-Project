@@ -37,7 +37,7 @@ with DAG(
     # Task: Check for the existence of raw JSON files in the local filesystem before extraction and dumping to bronze zone
     checking_raw_json_files_existence = FileSensor(
             task_id="raw_json_files_availabilty_verification",
-            fs_conn_id="filesystem_conn",   # Connection pointing to /opt/airflow/local-data/ and have to be configured through Airflow UI > Admin > Connections
+            fs_conn_id="fs_conn",   # Connection pointing to /opt/airflow/local-data/ and have to be configured through Airflow UI > Admin > Connections
             filepath="sales_*.json",
             poke_interval=config["TASKS"]["checking_raw_json_files_existence_poke_interval"],
             timeout=config["TASKS"]["checking_raw_json_files_existence_timeout"],
