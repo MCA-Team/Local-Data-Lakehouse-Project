@@ -218,6 +218,8 @@ def data_from_silver_to_gold(toml_config:dict[str, Any], ds:str) -> None:
                                 fileToTransform_path=silver_file_path, 
                                 partition_path=partition_path)
 
+    logging.info("Data transformation from Silver to Gold completed.")
+
 
 
 #
@@ -241,13 +243,9 @@ def gold_layer_processing(toml_config:dict[str, Any],
     fileToTransform = duckdb_connection.sql( f"""
                                                 SELECT transaction_id, \
                                                         transaction_date::DATE AS transaction_date, \
-                                                        client_name, 
                                                         item_product_name,  \
-                                                        item_quantity,  \
-                                                        item_unit_price,  \
                                                         total_amount,  \
                                                         transaction_currency,  \
-                                                        payment_method,  \
                                                 FROM read_parquet('s3://{toml_config['STORAGE']['silver_bucket_name']}/{fileToTransform_path}')
                                                 """)
     
@@ -271,26 +269,70 @@ def gold_layer_processing(toml_config:dict[str, Any],
 
     fileToTransform = fileToTransform\
                                     .select(duckdb.StarExpression(), total_amount_EUR.alias("total_amount_eur"))
-    logging.info(f"file to transform final: {fileToTransform}")
+    # logging.info(f"file to transform final: \n{fileToTransform}")
 
 
     # Each day total revenue: Sum of total_amount aggregate per day
     total_revenue = fileToTransform\
                             .aggregate(
                                 aggr_expr="transaction_date, SUM(total_amount_eur)::DECIMAL(10,3) AS total_revenue", 
-                                group_expr="transaction_date"
-                                )
-    logging.info(f"total_revenue: {total_revenue}")
+                                group_expr="transaction_date")\
+                            .set_alias("total_revenue")
+    logging.info(f"total_revenue created")
     
     # Each day total number of orders
+    assert fileToTransform.select("transaction_date").distinct().count("transaction_date").shape[0] <= 366, "A year got a maximum of 366 days"
     order_count = fileToTransform\
                             .aggregate(
                                 aggr_expr="transaction_date, COUNT(DISTINCT transaction_id) AS order_count", 
-                                group_expr="transaction_date"
-                                )
-    logging.info(f"order_count: {order_count}")
+                                group_expr="transaction_date")\
+                            .set_alias("order_count")
+    logging.info(f"order_count created")
     
     # avg_order_value : 
+    tmp = order_count.join(other_rel=total_revenue, 
+                           condition="transaction_date", 
+                           how="inner")
+    avg_order_value_expr = duckdb.FunctionExpression('divide', duckdb.ColumnExpression("total_revenue"), duckdb.ColumnExpression("order_count"))
+
+    avg_order_value = tmp.select(duckdb.StarExpression(), avg_order_value_expr.cast('DECIMAL(10,3)').alias("avg_order_value"))\
+                         .set_alias("avg_order_value")
+
+    # top_category : most sold item per day
+            # retrieving each distinct category and its total revenue per day
+    all_categories_per_day = fileToTransform\
+                                        .aggregate(aggr_expr="transaction_date, item_product_name, SUM(total_amount_eur)::DECIMAL(10,3) AS categories_daily_total_revenue",
+                                                   group_expr="transaction_date, item_product_name")\
+                                        .set_alias("all_categories_per_day")
+
+            # retrieving the maximum total revenue per day
+    top_category_per_day = all_categories_per_day\
+                                        .aggregate(aggr_expr="transaction_date, MAX(categories_daily_total_revenue) AS top_category_total_revenue",
+                                                   group_expr="transaction_date")\
+                                        .distinct()\
+                                        .set_alias("top_category_per_day")
+
+            # joining both to get the top category name and total_revenue per day
+    top_category = top_category_per_day\
+                                .join(other_rel=all_categories_per_day, 
+                                      condition="top_category_per_day.top_category_total_revenue = all_categories_per_day.categories_daily_total_revenue AND \
+                                                 top_category_per_day.transaction_date = all_categories_per_day.transaction_date", 
+                                      how="inner")\
+                                .select(*["top_category_per_day.transaction_date", "item_product_name", "top_category_total_revenue"])
+
+    # Merging all metrics into a single final gold table
+    final_gold_table = top_category\
+                                .join(avg_order_value, condition="transaction_date", how="inner")\
+                                .order("transaction_date")
+    logging.info(f"final_gold_table created: \n {final_gold_table.limit(5)}")
+
+    # Writting of the final data into Gold bucket
+    final_gold_table.write_parquet(
+                                    f"s3://{toml_config['STORAGE']['gold_bucket_name']}/{partition_path}/{fileToTransform_path.split('/')[-1]}", 
+                                    compression=toml_config['STORAGE']['gold_parquet_files_compression_mode'],
+                                    overwrite=True
+                                )
+    logging.info(f"Transformed data written to MinIO Gold bucket in Parquet format at : s3://{toml_config['STORAGE']['gold_bucket_name']}/{partition_path}/{fileToTransform_path.split('/')[-1]}")
    
 
 
@@ -345,5 +387,4 @@ def get_partition_path_blueprint(execution_date:str) ->str:
 
 
 def create_FileSensor_connection_informations() -> None:
-
     pass
