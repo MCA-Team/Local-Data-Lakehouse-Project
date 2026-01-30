@@ -26,3 +26,4 @@ checking_raw_json_files_existence_poke_interval = 10
 checking_raw_json_files_existence_timeout = 30
 checking_raw_json_files_existence_file_pattern = "sales_*"
 checking_raw_json_files_existence_file_path = "/opt/airflow/local-data/"
+gold_bucket_base_currency = "EUR"
