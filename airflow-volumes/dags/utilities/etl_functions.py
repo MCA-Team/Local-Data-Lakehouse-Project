@@ -2,8 +2,7 @@ from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from dotenv import dotenv_values
 from pathlib import Path
 from typing import Any
-import duckdb, os, logging, functools, tomllib
-
+import duckdb, os, logging, functools, tomllib,requests, json
 
 
 ########################################## CONSTANTS ##########################################
@@ -220,6 +219,11 @@ def data_from_silver_to_gold(toml_config:dict[str, Any], ds:str) -> None:
                                 partition_path=partition_path)
 
 
+
+#
+
+
+
 def gold_layer_processing(toml_config:dict[str, Any], 
                         duckdb_connection: duckdb.DuckDBPyConnection, 
                         fileToTransform_path: str, 
@@ -244,15 +248,39 @@ def gold_layer_processing(toml_config:dict[str, Any],
                                                         total_amount,  \
                                                         transaction_currency,  \
                                                         payment_method,  \
-                                                FROM read_parquet(s3://{toml_config['STORAGE']['silver_bucket_name']}/{fileToTransform_path})
+                                                FROM read_parquet('s3://{toml_config['STORAGE']['silver_bucket_name']}/{fileToTransform_path}')
                                                 """)
+    
+    # Conversion all total amount to the base currency
+    transaction_currencies = [currency[0].lower() for currency in fileToTransform.select("transaction_currency").distinct().fetchall()]
+    conversion_bag = get_currencies_rates(currencies_to_convert=transaction_currencies, base_currency_code=toml_config["TASKS"]["gold_bucket_base_currency"])
+    logging.info(f"Conversion bag: {conversion_bag}")
+
+    # Conversion of all values in "total_amount" column into base currency equivalent
+    convert_currency:callable[[float, str], float] = lambda amount, currency_code_to_convert : round(amount / conversion_bag[currency_code_to_convert],3)
+
+    if len(duckdb_connection\
+                        .execute("SELECT function_name FROM duckdb_functions() WHERE function_name = 'convert_currency'")\
+                        .fetchall()
+            )==0:
+        duckdb_connection.create_function("convert_currency", convert_currency, ['DOUBLE', 'VARCHAR'], 'DOUBLE')
+
+    total_amount_EUR = duckdb.FunctionExpression("convert_currency",
+                                                 duckdb.ColumnExpression("total_amount"),
+                                                 duckdb.ColumnExpression("transaction_currency"))
+
+    fileToTransform = fileToTransform\
+                                    .select(duckdb.StarExpression(), total_amount_EUR.alias("total_amount_eur"))
+    logging.info(f"file to transform final: {fileToTransform}")
+
 
     # Each day total revenue: Sum of total_amount aggregate per day
     total_revenue = fileToTransform\
                             .aggregate(
-                                aggr_expr="transaction_date, SUM(total_amount)::DECIMAL(10,3) AS total_revenue", 
+                                aggr_expr="transaction_date, SUM(total_amount_eur)::DECIMAL(10,3) AS total_revenue", 
                                 group_expr="transaction_date"
                                 )
+    logging.info(f"total_revenue: {total_revenue}")
     
     # Each day total number of orders
     order_count = fileToTransform\
@@ -260,9 +288,21 @@ def gold_layer_processing(toml_config:dict[str, Any],
                                 aggr_expr="transaction_date, COUNT(DISTINCT transaction_id) AS order_count", 
                                 group_expr="transaction_date"
                                 )
+    logging.info(f"order_count: {order_count}")
     
     # avg_order_value : 
-    
+   
+
+
+#
+def get_currencies_rates(currencies_to_convert:list[str], base_currency_code:str="USD") -> dict[str, float]:
+    # [In upper case] : The code of the currency that we have to convert other ones into (Example: if EUR is the base, we have to convert other currencies amounts into EUR before computing)
+    api_url = f"https://open.er-api.com/v6/latest/{base_currency_code}"
+    exchange_rates = requests.get(api_url).json()["rates"]
+
+    return {currency.upper() : exchange_rates[currency.upper()] for currency in currencies_to_convert}
+
+
 
 
 # ===============================================================================================================================================
