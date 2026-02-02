@@ -57,9 +57,9 @@ x-airflow-common:
   environment:
     &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
-    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${AIRFLOW_POSTGRES_USER}:${AIRFLOW_POSTGRES_PASSWORD}@airflow-postgres/airflow
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${AIRFLOW_POSTGRES_USER}:${AIRFLOW_POSTGRES_PASSWORD}@airflow-postgres/${AIRFLOW_POSTGRES_DB}
     # For backward compatibility, with Airflow <2.3
-    AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${AIRFLOW_POSTGRES_USER}:${AIRFLOW_POSTGRES_PASSWORD}@airflow-postgres/airflow
+    AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${AIRFLOW_POSTGRES_USER}:${AIRFLOW_POSTGRES_PASSWORD}@airflow-postgres/${AIRFLOW_POSTGRES_DB}
     # AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres/airflow
     # AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
     AIRFLOW__CORE__FERNET_KEY: ''
@@ -110,7 +110,7 @@ x-airflow-common:
 # create you own docker environment file (docker/.env) with your own
 # unique random secure passwords and SECRET_KEY.
 # -----------------------------------------------------------------------
-x-superset-image: &superset-image apachesuperset.docker.scarf.sh/apache/superset:${TAG:-latest-dev}
+x-superset-image: &superset-image apachesuperset.docker.scarf.sh/apache/superset:${SUPERSET_IMAGE_TAG:-latest-dev}
 x-superset-volumes:
   &superset-volumes # /app/pythonpath_docker will be appended to the PYTHONPATH in the final container
   - ./apache-superset-files:/app/docker
@@ -123,10 +123,10 @@ services:
     environment:
       POSTGRES_USER: ${AIRFLOW_POSTGRES_USER}
       POSTGRES_PASSWORD: ${AIRFLOW_POSTGRES_PASSWORD}
-      POSTGRES_DB: airflow
+      POSTGRES_DB: ${AIRFLOW_POSTGRES_DB}
     container_name: airflow-postgres
     ports:
-      - "5432:5432"
+      - "${AIRFLOW_POSTGRES_PORT:-5432}:${AIRFLOW_POSTGRES_PORT:-5432}"
     volumes:
       - ./postgresql-volume:/var/lib/postgresql/data
     healthcheck:
@@ -175,7 +175,7 @@ services:
     container_name: airflow-scheduler
     image: airflow-scheduler
     healthcheck:
-      test: ["CMD", "curl", "--fail", "http://localhost:8974/health"]
+      test: ["CMD", "curl", "--fail", "http://airflow-scheduler:8974/health"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -346,8 +346,8 @@ services:
     hostname: local-lakehouse-minio
     restart: always
     ports:
-      - "9008:9008"
-      - "9009:9009"
+      - "${MINIO_API_PORT:-9000}:${MINIO_API_PORT:-9000}"
+      - "${MINIO_CONSOLE_PORT:-9001}:${MINIO_CONSOLE_PORT:-9001}"
     environment:
       - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minioadmin}
       - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-minioadmin}
@@ -355,9 +355,9 @@ services:
       - ./minio-volumes/data:/mnt/data
       - ./minio-volumes/minio.license:/minio.license
       - ./minio-volumes/certs:/etc/minio/certs
-    command: ["minio", "server", "/mnt/data", "--console-address", ":9009", "--address", ":9008", "--license", "/minio.license"]
+    command: ["minio", "server", "/mnt/data", "--console-address", ":${MINIO_CONSOLE_PORT}", "--address", ":${MINIO_API_PORT}", "--license", "/minio.license"]
 
-  create-buckets:
+  minio-create-buckets:
     image: minio/mc:latest
     container_name: init-minio-buckets
     depends_on:
@@ -365,10 +365,10 @@ services:
     entrypoint: >
       /bin/sh -c "
       sleep 5;
-      mc alias set local-lakehouse http://aistor-server:9008 ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:-minioadmin};
-      mc mb --ignore-existing local-lakehouse/bronze;
-      mc mb --ignore-existing local-lakehouse/silver;
-      mc mb --ignore-existing local-lakehouse/gold;
+      mc alias set local-lakehouse http://aistor-server:${MINIO_API_PORT} ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:-minioadmin};
+      mc mb --ignore-existing local-lakehouse/${MINIO_BRONZE_BUCKET_NAME:-bronze};
+      mc mb --ignore-existing local-lakehouse/${MINIO_SILVER_BUCKET_NAME:-silver};
+      mc mb --ignore-existing local-lakehouse/${MINIO_GOLD_BUCKET_NAME:-gold};
       exit 0;
       "
     restart: on-failure   
@@ -377,16 +377,18 @@ services:
   superset-cache-redis:
       image: redis:7
       container_name: superset_cache
+      hostname: local-lakehouse-superset-cache
       restart: unless-stopped
       volumes:
         - redis:/data
 
-  superset-db:
+  superset-metadata-pgsql:
     env_file:
       - path: .env # default
         required: true
     image: postgres:15
     container_name: superset_db
+    hostname: local-lakehouse-superset-metadata
     environment:
       POSTGRES_USER: ${SUPERSET_POSTGRES_USER}
       POSTGRES_PASSWORD: ${SUPERSET_POSTGRES_PASSWORD}
@@ -402,6 +404,7 @@ services:
         required: true
     image: *superset-image
     container_name: superset_app
+    hostname: local-lakehouse-superset-app
     command: ["/app/docker/docker-bootstrap.sh", "app-gunicorn"]
     user: "root"
     restart: unless-stopped
@@ -422,7 +425,7 @@ services:
       - path: .env # default
         required: true
     depends_on:
-      superset-db:
+      superset-metadata-pgsql:
         condition: service_started
       superset-cache-redis:
         condition: service_started
@@ -437,6 +440,7 @@ services:
   superset-worker:
     image: *superset-image
     container_name: superset_worker
+    hostname: local-lakehouse-superset-worker
     command: ["/app/docker/docker-bootstrap.sh", "worker"]
     env_file:
       - path: .env # default
@@ -459,6 +463,7 @@ services:
   superset-worker-beat:
     image: *superset-image
     container_name: superset_worker_beat
+    hostname: local-lakehouse-superset-beat
     command: ["/app/docker/docker-bootstrap.sh", "beat"]
     env_file:
       - path: .env # default
