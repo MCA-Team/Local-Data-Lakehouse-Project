@@ -14,13 +14,14 @@
 
 [Setting up](#setting-up)
 
-[Project arborescence](#project-arborescence)
+[Project direcctory structure](#project-directory-structure)
 
 [Local lakehouse architecture explained](#local-lakehouse-architecture-explained)
 
+---
 
 ## Overiew
-This project is an exploration of data lakehouse concept. It helps us to understand how a data lake and a data warehouse act together in a single one system: **the data lakehouse**. This project implements it locally, simply and based on a medallion architecture (bronze - silver - gold layers), with open-source and free tools. 
+This project is an exploration of data lakehouse concept. It helps us to understand how a data lake and a data warehouse act together in a single one system: **the data lakehouse**. This project implements the latter locally, simply and based on a medallion architecture (bronze - silver - gold layers), with open-source and free tools. 
 
 ## Prerequisites
 To run this project locally, you must have the following tools already installed on your device:
@@ -35,7 +36,7 @@ After satisfying the above requirements, you can continue with the following ste
 git clone https://github.com/MCA-Team/Local-Data-Lakehouse-Project.git
 ```
 
-**Step 2**: In your terminal, navigate to the repository's root directory. Then execute the following command in order to automatically create containers' binded volumes.
+**Step 2**: In your terminal, navigate to the repository's root directory. Then, execute the following command in order to automatically create the containers binded volumes directories:
 ```bash
 make create-binded-volumes
 ```
@@ -45,11 +46,76 @@ make create-binded-volumes
 make dotenv
 ```
 
-
-
-
-
-## Project arborescence
+## Project direcctory structure
+Now, after setting up some stuff as shown in the previous section, the project directory's structure will look like this:
+```bash
+$ tree
+.
+├── airflow-volumes
+│   ├── config
+│   ├── dags
+│   │   ├── ELT_DAG.py
+│   │   └── utilities
+│   │       ├── dev-config.toml
+│   │       ├── elt_functions.py
+│   │       └── __init__.py
+│   ├── logs
+│   ├── plugins
+│   └── postgresql-volume
+├── apache-superset-files
+│   ├── docker-bootstrap.sh
+│   ├── docker-entrypoint-initdb.d
+│   │   ├── cypress-init.sh
+│   │   └── examples-init.sh
+│   ├── docker-init.sh
+│   ├── pythonpath_dev
+│   │   ├── superset_config_local.example
+│   │   └── superset_config.py
+│   └── requirements-local.txt
+├── data
+├── doc
+│   └── arch.png
+├── docker-compose.yaml
+├── dockerfile.airflow
+├── Makefile
+├── minio-volumes
+│   ├── certs
+│   ├── data
+│   └── minio.license
+├── README.md
+└── requirements.txt
+```
+Let's explore each directory or file and figure out their purposes:
+- **airflow-volumes/**: This directory contains all required volumes to persist Apache Airflow's data. Thoses volumes are binded or mount to ensure data sharing between the Airflow-related containers and local files:
+    - <u>***config/***</u>: Apache Airflow allows the user to use a custom configuration to run Airflow. Through this directory, the user can upload a [`airflow.cfg`](https://github.com/puckel/docker-airflow/blob/master/config/airflow.cfg) file detailling the wanted Airflow configuration. If the directory is empty, Airflow will run with default configuration.
+    - <u>***dags/***</u>: contains all DAG definitions which will be executed as DAG runs in Airflow. In this context, the only one DAG definition available is `ELT_DAG.py` file which describes the relation between each task from the raw data extraction (for bronze layer) to its refined one (stored in gold layer). This directory contains a subdirectory:
+        - ***dags/utilities/***: This directory has 2 files:
+            - **`dev-config.toml`**: Through this file, the DAG (defined by `airflow-volumes/dags/ELT_DAG.py` file) can be entirely configured. The file contains a lot of variables the user has to set a value for each. It is configured with default values but feel free to modify it at your ease. This file is designed for development environment usage. For production environment purposes, you can create a `prod-config.toml` file in the same directory as `dev-config.toml` one and based on it.
+            - **`elt_functions.py`**: This file is a kind of module with function definitions. Those functions are written based on the values in the `airflow-volumes/dags/utilities/dev-config.toml` file and are called by `airflow-volumes/dags/ELT_DAG.py` file during the Airflow DAG run's execution. In production environment, if you have created a `prod-config.toml` file, you have just to modify the **line 10** of `airflow-volumes/dags/utilities/elt_functions.py` file like this:
+            ```python
+            CONFIG_PATH = Path(__file__).parent / "utilities" / "prod-config.toml"
+            ```
+    - <u>***logs/***</u>: This directory contains all persisted Airflow's scheduler logs. Through these logs, the user is able to deeply inspect what happened during a DAG's execution.
+    - <u>***plugins/***</u>: All Airflow's installed plugins metadata will be stored in this directory.
+    - <u>***postgresql-volume/***</u> In this directory, many informations about Airflow's metadata database are stored. In our case, the database is PostgreSQL.
+- **apache-superset-files/**: Apache Supserset needs some configuration before running as a container. This directory holds the necessary files for Superset's containers.
+    - **`docker-bootstrap.sh`**: 
+    - <u>***docker-entrypoint-initdb.d/***</u>: 
+        - **`cypress-init.sh`**: 
+        - **`examples-init.sh`**: 
+    - **`docker-init.sh`**</u>: 
+    - <u>***pythonpath_dev/***</u>: 
+        - **`superset_config_local.example`**: 
+        - **`superset_config.py`**: 
+    - **`requirements-local.txt`**: 
+- **data/**: This directory will receive all `JSON` raw files that will be extracted and dumped into `Bronze` layer later.
+- **doc/**: contains some elements for `README.md` documentation file tweaking.
+- **docker-compose.yaml**: 
+- **dockerfile.airflow**: 
+- **Makefile**: The file which contains preset commands definitions. The `create-binded-volumes` and `dotenv` commands are defined there. It allows wrapping up complex commands sequences in one.
+- **minio-volumes/**: 
+- **README.md**: The documentation file.
+- **requirements.txt**: 
 
 ## Local lakehouse architecture explained
 
