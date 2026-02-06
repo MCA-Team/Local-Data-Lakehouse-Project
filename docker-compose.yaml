@@ -128,7 +128,7 @@ services:
     ports:
       - "${AIRFLOW_POSTGRES_PORT:-5432}:${AIRFLOW_POSTGRES_PORT:-5432}"
     volumes:
-      - ./postgresql-volume:/var/lib/postgresql/data
+      - ./airflow-volumes/postgresql-volume:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER}", "-d", "airflow"]
       interval: 10s
