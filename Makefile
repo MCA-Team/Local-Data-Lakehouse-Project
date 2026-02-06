@@ -1,23 +1,35 @@
-.PHONY: help init dotenv
+.PHONY: help create-binded-volumes dotenv
 .DEFAULT_GOAL = help
 
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
-init: ## Automatically initialize the project
-	@echo "Creation of airflow volumes directories"
-	@mkdir airflow-volumes
-	@mkdir -p airflow-volumes/dags airflow-volumes/logs airflow-volumes/config airflow-volumes/plugins airflow-volumes/postgresql-volume
-	@echo "Successfully done"
-	@echo "Creation of MinIO volume directory (data and certs directories)"
-	@mkdir -p minio-volumes/data minio-volumes/certs
-	@echo "Successfully done"
+create-binded-volumes: ## Automatically create the containers binded volumes
+	@for directory_name in "airflow-volumes/dags" \
+							"airflow-volumes/logs" \
+							"airflow-volumes/config" \
+							"airflow-volumes/plugins" \
+							"airflow-volumes/postgresql-volume" \
+							"minio-volumes/data" \
+							"minio-volumes/certs"; \
+	do \
+		if [ ! -d "$$directory_name" ]; then \
+			echo "Creation of $$directory_name directory"; \
+			mkdir -p $$directory_name; \
+			chown 
+			echo "Successfully done"; \
+		else \
+			echo "$$directory_name directory already exists"; \
+		fi \
+	done
+	
+	
 
 
 
 dotenv: ## Generate the project .env file blueprint
-	@echo "Creation of .env file blueprint"
+	@echo "Creation of a new '.env' file blueprint"
 	@echo "AIRFLOW_UID=1000\n\
 AIRFLOW_PROJ_DIR=./airflow-volumes\n\
 LOCAL_DATA_DIR=./data\n\
