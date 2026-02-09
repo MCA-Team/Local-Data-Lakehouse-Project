@@ -138,14 +138,41 @@ The architecture is pretty simple. The core is composed by 3 parts :
 
 How do these 3 parts interact ?
 ```mermaid
-graph TD;
-    A{Check file existence in './data/' directory} -->B[If file not found];
-    B-->C[Exit];
-    A-->D[If files exist];
-    D-->E[Transfert files to Bronze];
-    E-->F[(MinIO Bronze)]
-    E-->G(Transform '.json' files to '.parquet' files)
+architecture-beta
+    group api(cloud)[Docker environment]
+
+    service db(database)[Database] in api
+    service disk1(disk)[Storage] in api
+    service disk2(disk)[Storage] in api
+    service server(server)[Server] in api
+
+    db:L -- R:server
+    disk1:T -- B:server
+    disk2:T -- B:db
+
 ```
+The 3 elements above interact in an ELT process pattern. Apache Airflow configures some tasks. The first Airflow task scans `./data/` directory in order to find `.json` files following the `sales*.json` pattern. If no file is found, The process exits. Otherwise, Airflow starts its second task which picks found files from `./data/` directory and dumps them into MinIO Bronze bucket. After this operation, files are automatically removed from `./data/` directory. Then, the Bronze bucket's files are selected, processed by DuckDB in-memory engine (installed in Airflow-sceduler container through `./requirements.txt` file), and saved as `.parquet` files into MinIO Silver bucket. Finally, for the BI purposes, the last Airflow's task uses the processed Silver files, and apply processing like aggregations in order to keep only one line per date. Those new processed files are saved into MinIO Gold bucket as `.parquet` files.
+
+After that, Apache Superset is preconfigured with DuckDB-engine to allow requests to Gold bucket files. Then, through SQL queries and drag-and-drop components, a neat and informative dashboard can spring up. That's the global data flow of this local data lakehouse system.
+
+> [!INFO]
+> Cypress is being phased out in favor of Playwright. Use Playwright for all new tests.
+
+> [!INFO]
+> Cypress is being phased out in favor of Playwright. Use Playwright for all new tests.
+
+> [!INFO]
+> Cypress is being phased out in favor of Playwright. Use Playwright for all new tests.
+
+> [!INFO]
+> Cypress is being phased out in favor of Playwright. Use Playwright for all new tests.
+
+> [!INFO]
+> Cypress is being phased out in favor of Playwright. Use Playwright for all new tests.
+
+> [!INFO]
+> Cypress is being phased out in favor of Playwright. Use Playwright for all new tests.
+
 
 
 ## Demo
