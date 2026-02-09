@@ -45,42 +45,52 @@ make create-binded-volumes
 ```bash
 make dotenv
 ```
+**Step 4**: Include MinIO AIStor license in the directory because without it, MinIO won't run. Go to [MinIO AIStor website](https://www.min.io/pricing) and click **Free > Get started**. You'll receive your free and individual license through e-mail. Download it on your local disk and drop the `minio.license` file into `./minio-volumes/` directory. It should look like this at the end :
+
+```bash
+$ tree minio-volumes
+minio-volumes
+├── certs
+├── data
+└── minio.license
+
+3 directories, 1 file
+```
 
 ## Project direcctory structure
 Now, after setting up some stuff as shown in the previous section, the project directory's structure will look like this:
 ```bash
 $ tree
 .
-├── airflow-volumes
-│   ├── config
-│   ├── dags
+├── airflow-volumes/
+│   ├── config/
+│   ├── dags/
 │   │   ├── ELT_DAG.py
-│   │   └── utilities
+│   │   └── utilities/
 │   │       ├── dev-config.toml
 │   │       ├── elt_functions.py
 │   │       └── __init__.py
-│   ├── logs
-│   ├── plugins
-│   └── postgresql-volume
-├── apache-superset-files
+│   ├── logs/
+│   ├── plugins/
+│   └── postgresql-volume/
+├── apache-superset-files/
 │   ├── docker-bootstrap.sh
-│   ├── docker-entrypoint-initdb.d
+│   ├── docker-entrypoint-initdb.d/
 │   │   ├── cypress-init.sh
 │   │   └── examples-init.sh
 │   ├── docker-init.sh
-│   ├── pythonpath_dev
+│   ├── pythonpath_dev/
 │   │   ├── superset_config_local.example
 │   │   └── superset_config.py
 │   └── requirements-local.txt
-├── data
-├── doc
-│   └── arch.png
+├── data/
+├── doc/
 ├── docker-compose.yaml
 ├── dockerfile.airflow
 ├── Makefile
-├── minio-volumes
-│   ├── certs
-│   ├── data
+├── minio-volumes/
+│   ├── certs/
+│   ├── data/
 │   └── minio.license
 ├── README.md
 └── requirements.txt
@@ -99,24 +109,24 @@ Let's explore each directory or file and figure out their purposes:
     - <u>***plugins/***</u>: All Airflow's installed plugins metadata will be stored in this directory.
     - <u>***postgresql-volume/***</u> In this directory, many informations about Airflow's metadata database are stored. In our case, the database is PostgreSQL.
 - **apache-superset-files/**: Apache Supserset needs some configuration before running as a container. This directory holds the necessary files for Superset's containers.
-    - **`docker-bootstrap.sh`**: This Bash script is written for **superset(app)**, **superset-worker** and **superset-worker-beat** containers. The script installs the Python requirements for Superset (defined in `./apache-superset-files.requirements-local.txt` file) and for each container, execute the appropriate command in order to start them correctly.
+    - **`docker-bootstrap.sh`**: This Bash script is written for **superset(app)**, **superset-worker** and **superset-worker-beat** containers. The script installs the Python requirements for Superset (defined in `./apache-superset-files/requirements-local.txt` file) and for each container, executes the appropriate command in order to start them correctly.
     - <u>***docker-entrypoint-initdb.d/***</u>: The directory contains 2 files:
-        - **`cypress-init.sh`**: This Bash script creates a database for Cypress in the Superset metadata database (the **superset-metadata-pgsql** container). Cypress is a testing framework which will simulate a real user and tests some features. It's disabled by default.
-
-        > [!WARNING]
-        > Cypress is being phased out in favor of Playwright. Use Playwright for all new tests.
+        - **`cypress-init.sh`**: This Bash script creates a database for Cypress in the Superset metadata database (the **superset-metadata-pgsql** container). Cypress is a testing framework which will simulate a real user and will test some features. It's disabled by default. Take a peek at [Troubleshooting](#troubleshooting) section for additional infos.
 
         - **`examples-init.sh`**: This Bash script contains all instructions allowing the downloading and the loading of Superset examples (preset dashboards, charts, dataset,...). It's only executed if the variable `SUPERSET_LOAD_EXAMPLES` is set to **yes** in the `./.env` file.
     - **`docker-init.sh`**</u>: This Bash script is written for **superset-init** docker service. It executes the Superset examples loading, if `SUPERSET_LOAD_EXAMPLES=yes` in `./.env` file and sets up admin credentials and permissions.
     - <u>***pythonpath_dev/***</u>: 
-        - **`superset_config.py`**: This file contains the pythonic definition of Superset environment variables. It overrides the defined ones in the `.\.env` file and uses default values otherwise.
+        - **`superset_config.py`**: This file contains the pythonic definition of Superset environment variables. It overrides the defined ones in the `./.env` file and uses default values otherwise.
     - **`requirements-local.txt`**: This file contains the definition of all necessary Python additional packages for **Superset containers**.
 - **data/**: This directory will receive all `JSON` raw files that will be extracted and dumped into `Bronze` layer later.
 - **doc/**: contains some elements for `README.md` documentation file tweaking.
-- **docker-compose.yaml**: 
-- **dockerfile.airflow**: This dockerfile configures a custom image based on **apache-airflow:2.10.5** image by installing the `./requirements.txt` file dependencies.
+- **docker-compose.yaml**: This `.yaml` file describes the local data lakehouse architecture as a docker stack where each service is interconnected. There are 3 different parts: the data orchestration side with Airflow-related services, the storage side with MinIO services and the BI side with Superset-related ones.
+- **dockerfile.airflow**: This dockerfile configures a custom image based on **apache/airflow:2.10.5**'s one by installing the `./requirements.txt` file dependencies.
 - **Makefile**: The file which contains preset commands definitions. The `create-binded-volumes` and `dotenv` commands are defined there. It allows wrapping up complex commands sequences in one.
-- **minio-volumes/**: 
+- **minio-volumes/**: This directory contains all required volumes to persist MinIO AIStor's data. Thoses volumes are binded or mount to ensure data sharing between the MinIO container and local files:
+    - <u>***certs/***</u>: This directory holds security certificates and shares them with MinIO's container. Especially for SSL authentication, this should be helpful.
+    - <u>***data/***</u>: This directory contains the some data about the MinIO container (configuration files, buckets informations like logs, cache,...).
+    - **`minio.license`**: It's the activation license required to run the MinIO container correctly. Without it, the MinIO container will not start (correctly).
 - **README.md**: The documentation file.
 - **requirements.txt**: This file contains the definition of all necessary Python packages to build the `dockerfile.airflow` custom image
 
@@ -126,5 +136,5 @@ Let's explore each directory or file and figure out their purposes:
 
 ## Troubleshooting
 
-> [!TIP]
-> Urgent info that needs immediate user attention to avoid problems.
+> [!WARNING]
+> Cypress is being phased out in favor of Playwright. Use Playwright for all new tests.
