@@ -138,8 +138,9 @@ The architecture is pretty simple. The core is composed by 3 parts :
 
 How do these 3 parts interact ?
 ```mermaid
-A[Check the file existence in ./data/ directory] -> B[Extract file(s)]
-B -> C[(MinIO Bronze)]
+graph TD;
+    A[Check the file existence in ./data/ directory] -> B[Extract file(s)];
+    B -> C[(MinIO Bronze)];
 ```
 
 
