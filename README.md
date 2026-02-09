@@ -99,23 +99,24 @@ Let's explore each directory or file and figure out their purposes:
     - <u>***plugins/***</u>: All Airflow's installed plugins metadata will be stored in this directory.
     - <u>***postgresql-volume/***</u> In this directory, many informations about Airflow's metadata database are stored. In our case, the database is PostgreSQL.
 - **apache-superset-files/**: Apache Supserset needs some configuration before running as a container. This directory holds the necessary files for Superset's containers.
-    - **`docker-bootstrap.sh`**: 
-    - <u>***docker-entrypoint-initdb.d/***</u>: 
-        - **`cypress-init.sh`**: 
-        - **`examples-init.sh`**: 
-    - **`docker-init.sh`**</u>: 
+    - **`docker-bootstrap.sh`**: This Bash script is written for **superset(app)**, **superset-worker** and **superset-worker-beat** containers. The script installs the Python requirements for Superset (defined in `./apache-superset-files.requirements-local.txt` file) and for each container, execute the appropriate command in order to start them correctly.
+    - <u>***docker-entrypoint-initdb.d/***</u>: The directory contains 2 files:
+        - **`cypress-init.sh`**: This Bash script creates a database for Cypress in the Superset metadata database (the **superset-metadata-pgsql** container). Cypress is a testing framework which will simulate a real user and tests some features. It's disabled by default.
+        > [!WARNING]
+        > Cypress is being phased out in favor of Playwright. Use Playwright for all new tests.
+        - **`examples-init.sh`**: This Bash script contains all instructions allowing the downloading and the loading of Superset examples (preset dashboards, charts, dataset,...). It's only executed if the variable `SUPERSET_LOAD_EXAMPLES` is set to **yes** in the `./.env` file.
+    - **`docker-init.sh`**</u>: This Bash script is written for **superset-init** docker service. It executes the Superset examples loading, if `SUPERSET_LOAD_EXAMPLES=yes` in `./.env` file and sets up admin credentials and permissions.
     - <u>***pythonpath_dev/***</u>: 
-        - **`superset_config_local.example`**: 
-        - **`superset_config.py`**: 
-    - **`requirements-local.txt`**: 
+        - **`superset_config.py`**: This file contains the pythonic definition of Superset environment variables. It overrides the defined ones in the `.\.env` file and uses default values otherwise.
+    - **`requirements-local.txt`**: This file contains the definition of all necessary Python additional packages for **Superset containers**.
 - **data/**: This directory will receive all `JSON` raw files that will be extracted and dumped into `Bronze` layer later.
 - **doc/**: contains some elements for `README.md` documentation file tweaking.
 - **docker-compose.yaml**: 
-- **dockerfile.airflow**: 
+- **dockerfile.airflow**: This dockerfile configures a custom image based on **apache-airflow:2.10.5** image by installing the `./requirements.txt` file dependencies.
 - **Makefile**: The file which contains preset commands definitions. The `create-binded-volumes` and `dotenv` commands are defined there. It allows wrapping up complex commands sequences in one.
 - **minio-volumes/**: 
 - **README.md**: The documentation file.
-- **requirements.txt**: 
+- **requirements.txt**: This file contains the definition of all necessary Python packages to build the `dockerfile.airflow` custom image
 
 ## Local lakehouse architecture explained
 
