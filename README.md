@@ -139,10 +139,12 @@ The architecture is pretty simple. The core is composed by 3 parts :
 How do these 3 parts interact ?
 ```mermaid
 graph TD;
-    A-->B;
-    A-->C;
-    B-->D;
-    C-->D;
+    A{Check file existence in './data/' directory} -->B[If file not found];
+    B-->C[Exit];
+    A-->D[If files exist];
+    D-->E[Transfert files to Bronze];
+    E-->F[(MinIO Bronze)]
+    E-->G(Transform '.json' files to '.parquet' files)
 ```
 
 
