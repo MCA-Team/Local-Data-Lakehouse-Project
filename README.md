@@ -131,6 +131,17 @@ Let's explore each directory or file and figure out their purposes:
 - **requirements.txt**: This file contains the definition of all necessary Python packages to build the `dockerfile.airflow` custom image
 
 ## Local lakehouse architecture explained
+The architecture is pretty simple. The core is composed by 3 parts :
+- **The data orchestrator**: represented by Apache Airflow's ecosystem. It controls the tasks flows and triggers specific tasks accordingly to specific events.
+- **The storage**: which represents the Medallion architecture. MinIO which is a S3-compatible Object Storage is fitted for this role. With 3 buckets, each associated to Bronze - Silver - Gold concepts, it fullfits storage requirements dor this use cas.
+- **The BI**: Apache Superset is a modern, open-source and efficient BI tool which totally satisfy BI requirements, providing rich charts and visualization assets.
+
+How do these 3 parts interact ?
+```mermaid
+A[Check the file existence in ./data/ directory] -> B[Extract file(s)]
+B -> C[(MinIO Bronze)]
+```
+
 
 ## Demo
 
