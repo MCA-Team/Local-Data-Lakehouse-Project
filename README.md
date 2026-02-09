@@ -138,9 +138,11 @@ The architecture is pretty simple. The core is composed by 3 parts :
 
 How do these 3 parts interact ?
 ```mermaid
-graph TD
-    A -> B
-    B -> C
+graph TD;
+    A-->B;
+    A-->C;
+    B-->D;
+    C-->D;
 ```
 
 
