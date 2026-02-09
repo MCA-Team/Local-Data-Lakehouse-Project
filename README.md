@@ -102,8 +102,10 @@ Let's explore each directory or file and figure out their purposes:
     - **`docker-bootstrap.sh`**: This Bash script is written for **superset(app)**, **superset-worker** and **superset-worker-beat** containers. The script installs the Python requirements for Superset (defined in `./apache-superset-files.requirements-local.txt` file) and for each container, execute the appropriate command in order to start them correctly.
     - <u>***docker-entrypoint-initdb.d/***</u>: The directory contains 2 files:
         - **`cypress-init.sh`**: This Bash script creates a database for Cypress in the Superset metadata database (the **superset-metadata-pgsql** container). Cypress is a testing framework which will simulate a real user and tests some features. It's disabled by default.
+
         > [!WARNING]
         > Cypress is being phased out in favor of Playwright. Use Playwright for all new tests.
+
         - **`examples-init.sh`**: This Bash script contains all instructions allowing the downloading and the loading of Superset examples (preset dashboards, charts, dataset,...). It's only executed if the variable `SUPERSET_LOAD_EXAMPLES` is set to **yes** in the `./.env` file.
     - **`docker-init.sh`**</u>: This Bash script is written for **superset-init** docker service. It executes the Superset examples loading, if `SUPERSET_LOAD_EXAMPLES=yes` in `./.env` file and sets up admin credentials and permissions.
     - <u>***pythonpath_dev/***</u>: 
@@ -123,3 +125,6 @@ Let's explore each directory or file and figure out their purposes:
 ## Demo
 
 ## Troubleshooting
+
+> [!TIP]
+> Urgent info that needs immediate user attention to avoid problems.
