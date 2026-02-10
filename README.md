@@ -133,45 +133,25 @@ Let's explore each directory or file and figure out their purposes:
 ## Local lakehouse architecture explained
 The architecture is pretty simple. The core is composed by 3 parts :
 - **The data orchestrator**: represented by Apache Airflow's ecosystem. It controls the tasks flows and triggers specific tasks accordingly to specific events.
-- **The storage**: which represents the Medallion architecture. MinIO which is a S3-compatible Object Storage is fitted for this role. With 3 buckets, each associated to Bronze - Silver - Gold concepts, it fullfits storage requirements dor this use cas.
-- **The BI**: Apache Superset is a modern, open-source and efficient BI tool which totally satisfy BI requirements, providing rich charts and visualization assets.
+- **The storage**: which represents the Medallion architecture. MinIO which is a S3-compatible Object Storage is fitted for this role. With 3 buckets, each associated to Bronze - Silver - Gold concepts, it fulfills storage requirements for this use case.
+- **The BI**: Apache Superset is a modern, open-source and efficient BI tool which totally satisfies BI requirements, providing rich charts and visualization assets.
 
-How do these 3 parts interact ?
-```mermaid
-architecture-beta
-    group api(cloud)[Docker environment]
+> How do these 3 parts interact ?
 
-    service db(database)[Database] in api
-    service disk1(disk)[Storage] in api
-    service disk2(disk)[Storage] in api
-    service server(server)[Server] in api
+<image src="./doc/arch.png" width=1000 center>
 
-    db:L -- R:server
-    disk1:T -- B:server
-    disk2:T -- B:db
+The 3 elements above interact in an ELT process pattern. Apache Airflow configures some tasks. The first Airflow task scans `./data/` directory in order to find `.json` files following the `sales*.json` name pattern. If no file is found, The process exits. Otherwise, Airflow starts its second task which picks found files from `./data/` directory and dumps them into MinIO Bronze bucket. After this operation, files are automatically removed from `./data/` directory. Then, the Bronze bucket's files are selected, processed by DuckDB in-memory engine (installed in Airflow-sceduler container through `./requirements.txt` file) and saved as `.parquet` files into MinIO Silver bucket. Finally, for BI purposes, the last Airflow's task uses the processed Silver files, and apply processings like aggregations in order to keep only one line per date. Those new processed files are saved into MinIO Gold bucket as `.parquet` files.
 
-```
-The 3 elements above interact in an ELT process pattern. Apache Airflow configures some tasks. The first Airflow task scans `./data/` directory in order to find `.json` files following the `sales*.json` pattern. If no file is found, The process exits. Otherwise, Airflow starts its second task which picks found files from `./data/` directory and dumps them into MinIO Bronze bucket. After this operation, files are automatically removed from `./data/` directory. Then, the Bronze bucket's files are selected, processed by DuckDB in-memory engine (installed in Airflow-sceduler container through `./requirements.txt` file), and saved as `.parquet` files into MinIO Silver bucket. Finally, for the BI purposes, the last Airflow's task uses the processed Silver files, and apply processing like aggregations in order to keep only one line per date. Those new processed files are saved into MinIO Gold bucket as `.parquet` files.
+After that, Apache Superset is preconfigured with DuckDB-engine to allow requests between Superset itself and MinIO Gold bucket files. Then, through SQL queries and drag-and-drop components, a neat and informative dashboard can spring up. That's the global data flow of this local data lakehouse system.
 
-After that, Apache Superset is preconfigured with DuckDB-engine to allow requests to Gold bucket files. Then, through SQL queries and drag-and-drop components, a neat and informative dashboard can spring up. That's the global data flow of this local data lakehouse system.
+> [!NOTE]
+> After the data extraction task successfully wrote the files in Bronze bucket, another task must remove the files from `./data/` directory for local memory purpopes and because Bronze bucket acts like a data lake.
 
-> [!INFO]
-> Cypress is being phased out in favor of Playwright. Use Playwright for all new tests.
+> [!NOTE]
+> For **data idempotency and partioning**, the files stored in MinIO follow a temporal file structure for each bucket : `/year=2024/month=01/day=15/sales_2024.parquet` for example. This allows the user to replay a specific day without impacting the rest.
 
-> [!INFO]
-> Cypress is being phased out in favor of Playwright. Use Playwright for all new tests.
-
-> [!INFO]
-> Cypress is being phased out in favor of Playwright. Use Playwright for all new tests.
-
-> [!INFO]
-> Cypress is being phased out in favor of Playwright. Use Playwright for all new tests.
-
-> [!INFO]
-> Cypress is being phased out in favor of Playwright. Use Playwright for all new tests.
-
-> [!INFO]
-> Cypress is being phased out in favor of Playwright. Use Playwright for all new tests.
+> [!NOTE]
+> 
 
 
 
