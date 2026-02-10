@@ -4,14 +4,14 @@ from airflow.operators.python import PythonOperator
 from airflow.operators.bash import BashOperator
 import logging
 from datetime import datetime
-from utilities import etl_functions
+from utilities import elt_functions
 
 
 
 
 
 # Loading of TOML config file's variables
-config = etl_functions.load_config("dags/utilities/dev-config.toml")
+config = elt_functions.load_config("dags/utilities/dev-config.toml")
 
 # Airflow DAG's default arguments
 def_args = {
@@ -47,7 +47,7 @@ with DAG(
     # Task: Extract JSON files from source directory and dumping them into MinIO bronze bucket
     extract = PythonOperator(
         task_id="extract_raw_json_files_to_minio_bronze",
-        python_callable=etl_functions.extract_raw_json_files_to_minio_bronze,
+        python_callable=elt_functions.extract_raw_json_files_to_minio_bronze,
         op_kwargs={"toml_config": config}
     )
 
@@ -61,14 +61,14 @@ with DAG(
     # Task: Transform (flattening, type checking, filtering) JSON files data from MinIO bronze bucket and dumping them into MinIO Silver bucket
     transform = PythonOperator(
         task_id="transform_bronze_data_and_dump_into_silver_zone",
-        python_callable=etl_functions.transform_bronze_data_to_silver,
+        python_callable=elt_functions.transform_bronze_data_to_silver,
         op_kwargs={"toml_config": config}
     )
 
     # Task: Harness and reprocess MinIO Silver bucket data  through MinIO Gold bucket for BI purposes
     load = PythonOperator(
         task_id="data_from_silver_to_gold",
-        python_callable=etl_functions.data_from_silver_to_gold,
+        python_callable=elt_functions.data_from_silver_to_gold,
         op_kwargs={"toml_config": config}
     )
 
