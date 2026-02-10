@@ -342,7 +342,7 @@ services:
 
   minio-aistor:
     image: quay.io/minio/aistor/minio
-    container_name: aistor-server
+    container_name: minio-server
     hostname: local-lakehouse-minio
     restart: always
     ports:
