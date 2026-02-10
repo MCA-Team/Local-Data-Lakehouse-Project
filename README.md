@@ -151,12 +151,73 @@ After that, Apache Superset is preconfigured with DuckDB-engine to allow request
 > For **data idempotency and partioning**, the files stored in MinIO follow a temporal file structure for each bucket : `/year=2024/month=01/day=15/sales_2024.parquet` for example. This allows the user to replay a specific day without impacting the rest.
 
 > [!NOTE]
-> 
+> This infrastructure is designed as a Modern Data Stack (MDS)
 
 
 
-## Demo
+## Execution
+The infrastructure is a set of docker containers. That's why the user have to set up the containers stack by executing the following command in the terminal at the root of the repository's directory:
+```
+docker compose up -d
+```
 
+> [!WARNING]
+> Check the status of all containers. You must have the **'Up'** status for all containers before going on. You can easily check the status through this command:
+> ```
+> docker container ls
+> ```
+
+To access some containers WebUI:
+Address     | Container/service
+----------- | ---------
+`http://localhost:8080` | Apache Airflow WebUI
+`http://localhost:8088` | Apache Superset WebUI
+`http://localhost:9009` | MinIO AIStor Console
+
+After setting up the insfrastructure, the user must configure some stuffs in order to ensure everything run well:
+
+### 1. Apache Airflow Connections:
+
+It is a Airflow's feature that allows the user to store sensitive information like credentials. The configuration can be done through the Airflow Web UI (**Admin > Connection**). The user have to configure 4 connections:
+
+- **Check `.json` files existence**: To allow Airflow scanning the local directory `./data/` to check the files existence, The user must configure a Airflow connection:
+
+    - <u>*Connection id*</u>: must be the same as the value of `fileSensor_connection_id` variable in `./airflow-volumes/dags/utilities/dev-config.toml` file. By default, it is **"fs_conn"**.
+    - <u>*Connection Type*</u>: **File (path)**
+    - <u>*Path*</u>: **/opt/airflow/local-data**
+
+<image src="./doc/fs_conn.gif" width=1000 center>
+
+- **Connect Airflow to MinIO**: To allow Airflow writing and reading files in MinIO buckets. MinIO being a S3-compatible object storage, its API works like AWS S3 one:
+
+    - <u>*Connection id*</u>: must be the same as the value of `airflow_aws_connection_id` variable in `./airflow-volumes/dags/utilities/dev-config.toml` file. By default, it is **"minio_conn"**.
+    - <u>*Connection Type*</u>: **Amazon Web Services**
+    - <u>*AWS Access Key ID*</u>: **/opt/airflow/local-data**
+    - <u>*AWS Secret Access Key*</u>: **/opt/airflow/local-data**
+    - <u>*Extra*</u>: The endpoint URL is a string built like this: *"<MINIO_CONTAINER_NAME>:<MINIO_API_PORT>"* (it's litteraly the URL through Airflow can communicate with MinIO's API). So, copy and paste the following snippet:
+    ```json
+    {
+      "endpoint_url": "minio-server:9008"
+    }
+    ```
+
+> [!NOTE]
+> For more details: [Airflow S3 connection](https://airflow.apache.org/docs/apache-airflow-providers-amazon/9.2.0/connections/aws.html)
+
+<image src="./doc/minio_conn.gif" width=1000 center>
+
+
+
+
+
+List of useful commands for this project:
+
+Command     | Description
+----------- | ---------
+```make dotenv``` | Generates a new blueprint for `./.env` file
+```make create-binded-volumes``` | Automatically creates the containers binded volumes
+```docker compose up -d``` | Automatically sets up the infrastructure
+```docker compose down``` | Shutdowns and remove all containers
 ## Troubleshooting
 
 > [!WARNING]
