@@ -1,9 +1,9 @@
-.PHONY: help create-binded-volumes dotenv
+.PHONY: help create-binded-volumes dotenv setup-infra shutdown-infra
 .DEFAULT_GOAL = help
 
 
 help:
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-24s\033[0m %s\n", $$1, $$2}'
 
 create-binded-volumes: ## Automatically create the containers binded volumes
 	@for directory_name in "airflow-volumes/dags" \
@@ -25,8 +25,13 @@ create-binded-volumes: ## Automatically create the containers binded volumes
 	done
 	
 	
+setup-infra: ## Automatically set up the infra by creating the containers, the volumes and the network(s)
+	@docker compose -f docker-compose.yaml up -d
+	@sleep 120
+	@docker compose rm -f airflow-init superset-init minio-create-buckets
 
-
+shutdown-infra:	## Automatically shutdown the infra removing the containers and the network(s)
+	@docker compose down
 
 dotenv: ## Generate the project .env file blueprint
 	@echo "Creation of a new '.env' file blueprint"
