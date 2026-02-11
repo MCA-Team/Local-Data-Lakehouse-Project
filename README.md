@@ -18,6 +18,8 @@
 
 [Local lakehouse architecture explained](#local-lakehouse-architecture-explained)
 
+[Run the project](#run-the-project)
+
 ---
 
 ## Overiew
@@ -148,17 +150,17 @@ After that, Apache Superset is preconfigured with DuckDB-engine to allow request
 > After the data extraction task successfully wrote the files in Bronze bucket, another task must remove the files from `./data/` directory for local memory purpopes and because Bronze bucket acts like a data lake.
 
 > [!NOTE]
-> For **data idempotency and partioning**, the files stored in MinIO follow a temporal file structure for each bucket : `/year=2024/month=01/day=15/sales_2024.parquet` for example. This allows the user to replay a specific day without impacting the rest.
+> For **data idempotency and partioning**, the files are stored in MinIO following a temporal file structure for each bucket : `/year=2024/month=01/day=15/sales_20240115.parquet` for example. This allows the user to replay a specific day without impacting the rest.
 
 > [!NOTE]
 > This infrastructure is designed as a Modern Data Stack (MDS)
 
 
 
-## Execution
+## Run the project
 The infrastructure is a set of docker containers. That's why the user have to set up the containers stack by executing the following command in the terminal at the root of the repository's directory:
-```
-docker compose up -d
+```bash
+make setup-infra
 ```
 
 > [!WARNING]
@@ -167,20 +169,20 @@ docker compose up -d
 > docker container ls
 > ```
 
-To access some containers WebUI:
+Main containers Web UI addresses:
 Address     | Container/service
 ----------- | ---------
-`http://localhost:8080` | Apache Airflow WebUI
-`http://localhost:8088` | Apache Superset WebUI
+`http://localhost:8080` | Apache Airflow Web UI
+`http://localhost:8088` | Apache Superset Web UI
 `http://localhost:9009` | MinIO AIStor Console
 
-After setting up the insfrastructure, the user must configure some stuffs in order to ensure everything run well:
+After setting up the insfrastructure, the user must configure some stuffs in order to ensure everything is running well:
 
-### 1. Apache Airflow Connections:
+### 1. Apache Airflow Connections
 
-It is a Airflow's feature that allows the user to store sensitive information like credentials. The configuration can be done through the Airflow Web UI (**Admin > Connection**). The user have to configure 4 connections:
+It is a Airflow's feature that allows the user to store sensitive information like credentials. The configuration can be done through the Airflow Web UI (**Admin > Connection**). The user have to configure 2 Airflow connections:
 
-- **Check `.json` files existence**: To allow Airflow scanning the local directory `./data/` to check the files existence, The user must configure a Airflow connection:
+- **Check `.json` files existence**: To allow Airflow to scan the local directory `./data/` to check the files existence, The user must configure a Airflow connection:
 
     - <u>*Connection id*</u>: must be the same as the value of `fileSensor_connection_id` variable in `./airflow-volumes/dags/utilities/dev-config.toml` file. By default, it is **"fs_conn"**.
     - <u>*Connection Type*</u>: **File (path)**
@@ -188,16 +190,16 @@ It is a Airflow's feature that allows the user to store sensitive information li
 
 <image src="./doc/fs_conn.gif" width=1000 center>
 
-- **Connect Airflow to MinIO**: To allow Airflow writing and reading files in MinIO buckets. MinIO being a S3-compatible object storage, its API works like AWS S3 one:
+- **Connect Airflow to MinIO**: To allow Airflow to read and write files in MinIO buckets. MinIO being a S3-compatible object storage, its API works like AWS S3 one:
 
     - <u>*Connection id*</u>: must be the same as the value of `airflow_aws_connection_id` variable in `./airflow-volumes/dags/utilities/dev-config.toml` file. By default, it is **"minio_conn"**.
     - <u>*Connection Type*</u>: **Amazon Web Services**
-    - <u>*AWS Access Key ID*</u>: **/opt/airflow/local-data**
-    - <u>*AWS Secret Access Key*</u>: **/opt/airflow/local-data**
-    - <u>*Extra*</u>: The endpoint URL is a string built like this: *"<MINIO_CONTAINER_NAME>:<MINIO_API_PORT>"* (it's litteraly the URL through Airflow can communicate with MinIO's API). So, copy and paste the following snippet:
+    - <u>*AWS Access Key ID*</u>: the value of `MINIO_ROOT_USER` variable in `./.env` file.
+    - <u>*AWS Secret Access Key*</u>: the value of `MINIO_ROOT_PASSWORD` variable in `./.env` file.
+    - <u>*Extra*</u>: The endpoint URL is a string built like this: *"<MINIO_CONTAINER_NAME>:<MINIO_API_PORT>"* (it's litteraly the URL which will be used by Airflow to communicate with MinIO's API). So, copy and paste the following snippet:
     ```json
     {
-      "endpoint_url": "minio-server:9008"
+      "endpoint_url": "http://minio-server:9008"
     }
     ```
 
@@ -205,6 +207,39 @@ It is a Airflow's feature that allows the user to store sensitive information li
 > For more details: [Airflow S3 connection](https://airflow.apache.org/docs/apache-airflow-providers-amazon/9.2.0/connections/aws.html)
 
 <image src="./doc/minio_conn.gif" width=1000 center>
+
+### 2. Apache Superset configuration
+Superset needs an engine to query data from Gold bucket and display it on the dashboard. DuckDB in-memory engine is already embedded in Superset container. So, the user needs to connect Superset to this engine through **"+ > Data > Connect database"** and follow the steps shown below:
+
+<image src="./doc/superset_duckdb.gif" width=1000 center>
+
+- Use SQLAlchemy DuckDB URI for the connection
+    - for in-memory usage
+        ```
+        duckdb:///:memory:
+        ```
+    - if the user wants to persist data through DuckDB Engine (replace <DB_NAME> by the wanted file name, `superset.db` for example)
+        ```
+        duckdb:///<DB_NAME>.db
+        ```
+- Copy and paste this useful snippet for **Engine Parameters** section:
+```json
+{
+    "connect_args": {
+        "config": {
+            "s3_endpoint": "minio-server:9008",
+            "s3_access_key_id": "<MINIO_ROOT_USER>",
+            "s3_secret_access_key": "<MINIO_ROOT_PASSWD>",
+            "s3_use_ssl": "false",
+            "s3_url_style": "path"
+        }
+    }
+}
+```
+
+
+
+
 
 
 
