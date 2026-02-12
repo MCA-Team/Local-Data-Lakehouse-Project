@@ -380,7 +380,7 @@ services:
       hostname: local-lakehouse-superset-cache
       restart: unless-stopped
       volumes:
-        - redis:/data
+        - superset_redis_cache_volume:/data
 
   superset-metadata-pgsql:
     env_file:
@@ -395,7 +395,7 @@ services:
       POSTGRES_DB: ${SUPERSET_POSTGRES_DB}
     restart: unless-stopped
     volumes:
-      - superset_db_volume:/var/lib/postgresql/data
+      - superset_metadata_db_volume:/var/lib/postgresql/data
       - ./apache-superset-files/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
 
   superset:
@@ -484,7 +484,7 @@ volumes:
   postgresql-volume:
   superset_home:
     external: false
-  superset_db_volume:
+  superset_metadata_db_volume:
     external: false
-  redis:
+  superset_redis_cache_volume:
     external: false
