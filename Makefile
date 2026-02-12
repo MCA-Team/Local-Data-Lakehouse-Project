@@ -17,7 +17,6 @@ create-binded-volumes: ## Automatically create the containers binded volumes
 		if [ ! -d "$$directory_name" ]; then \
 			echo "Creation of $$directory_name directory"; \
 			mkdir -p $$directory_name; \
-			chown 
 			echo "Successfully done"; \
 		else \
 			echo "$$directory_name directory already exists"; \
@@ -27,8 +26,8 @@ create-binded-volumes: ## Automatically create the containers binded volumes
 	
 setup-infra: ## Automatically set up the infra by creating the containers, the volumes and the network(s)
 	@docker compose -f docker-compose.yaml up -d
-	@sleep 120
-	@docker compose rm -f airflow-init superset-init minio-create-buckets
+	@sleep 5
+	@docker compose rm -f superset-init minio-create-buckets
 
 shutdown-infra:	## Automatically shutdown the infra removing the containers and the network(s)
 	@docker compose down
