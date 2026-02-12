@@ -14,7 +14,7 @@
 
 [Setting up](#setting-up)
 
-[Project direcctory structure](#project-directory-structure)
+[Project directory structure](#project-directory-structure)
 
 [Local lakehouse architecture explained](#local-lakehouse-architecture-explained)
 
@@ -59,7 +59,7 @@ minio-volumes
 3 directories, 1 file
 ```
 
-## Project direcctory structure
+## Project directory structure
 Now, after setting up some stuff as shown in the previous section, the project directory's structure will look like this:
 ```bash
 $ tree
@@ -196,7 +196,7 @@ It is a Airflow's feature that allows the user to store sensitive information li
     - <u>*Connection Type*</u>: **Amazon Web Services**
     - <u>*AWS Access Key ID*</u>: the value of `MINIO_ROOT_USER` variable in `./.env` file.
     - <u>*AWS Secret Access Key*</u>: the value of `MINIO_ROOT_PASSWORD` variable in `./.env` file.
-    - <u>*Extra*</u>: The endpoint URL is a string built like this: *"<MINIO_CONTAINER_NAME>:<MINIO_API_PORT>"* (it's litteraly the URL which will be used by Airflow to communicate with MinIO's API). So, copy and paste the following snippet:
+    - <u>*Extra*</u>: The endpoint URL is a string built like this: *"http://<MINIO_CONTAINER_NAME>:<MINIO_API_PORT>"* (it's litteraly the URL which will be used by Airflow to communicate with MinIO's API). So, copy and paste the following snippet:
     ```json
     {
       "endpoint_url": "http://minio-server:9008"
@@ -209,7 +209,7 @@ It is a Airflow's feature that allows the user to store sensitive information li
 <image src="./doc/minio_conn.gif" width=1000 center>
 
 ### 2. Apache Superset configuration
-Superset needs an engine to query data from Gold bucket and display it on the dashboard. DuckDB in-memory engine is already embedded in Superset container. So, the user needs to connect Superset to this engine through **"+ > Data > Connect database"** and follow the steps shown below:
+Apache Superset needs an engine to query data from Gold bucket and display it on the dashboard. DuckDB in-memory engine is already embedded in our Superset container. So, the user needs to connect Superset to this engine through **"+ > Data > Connect database"** by following the steps shown below:
 
 <image src="./doc/superset_duckdb.gif" width=1000 center>
 
@@ -222,7 +222,7 @@ Superset needs an engine to query data from Gold bucket and display it on the da
         ```
         duckdb:///<DB_NAME>.db
         ```
-- Copy and paste this useful snippet for **Engine Parameters** section:
+- The JSON snippet below allows Superset DuckDB's engine to communicate with MinIO's S3 API through an endpoint. Copy and paste the snippet for **Engine Parameters** section:
 ```json
 {
     "connect_args": {
@@ -236,8 +236,13 @@ Superset needs an engine to query data from Gold bucket and display it on the da
     }
 }
 ```
+Then, the user have to create a Superset dataset which is a kind of table view in Superset. In our case, it's simple to do it through the **Superset SQL Lab** with the simple DuckDB SQL request below (replace `YEAR`, `MONTH` and `DAY` by the correct values in order to have the right path to the files in the MinIO Gold bucket):
+```sql
+SELECT * FROM read_parquet("s3://gold/year=YEAR/month=MONTH/day=DAY/*.parquet");
+```
+<image src="./doc/superset_dataset.gif" width=1000 center>
 
-
+Now, the user can build a custom BI dashboard based on the created dataset. There is an example of dataset:
 
 
 
@@ -251,8 +256,9 @@ Command     | Description
 ----------- | ---------
 ```make dotenv``` | Generates a new blueprint for `./.env` file
 ```make create-binded-volumes``` | Automatically creates the containers binded volumes
-```docker compose up -d``` | Automatically sets up the infrastructure
-```docker compose down``` | Shutdowns and remove all containers
+```make setup-infra`` | Automatically sets up the infrastructure
+```make shutdown-infra``` | Shutdowns and remove all containers
+
 ## Troubleshooting
 
 > [!WARNING]
