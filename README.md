@@ -256,7 +256,7 @@ Command     | Description
 ----------- | ---------
 ```make dotenv``` | Generates a new blueprint for `./.env` file
 ```make create-binded-volumes``` | Automatically creates the containers binded volumes
-```make setup-infra`` | Automatically sets up the infrastructure
+```make setup-infra``` | Automatically sets up the infrastructure
 ```make shutdown-infra``` | Shutdowns and remove all containers
 
 ## Troubleshooting
