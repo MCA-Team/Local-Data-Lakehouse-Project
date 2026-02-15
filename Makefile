@@ -26,11 +26,25 @@ create-binded-volumes: ## Automatically create the containers binded volumes
 	
 setup-infra: ## Automatically set up the infra by creating the containers, the volumes and the network(s)
 	@docker compose -f docker-compose.yaml up -d
+	@echo "Wait a moment...\n"
 	@sleep 5
 	@docker compose rm -f superset-init minio-create-buckets
+	@echo "Infrastructure successfully set up !"
 
 shutdown-infra:	## Automatically shutdown the infra removing the containers and the network(s)
 	@docker compose down
+
+create-docker-secrets:
+	@if [ ! -d "docker-secrets" ]; then\
+		mkdir ./docker-secrets;\
+	fi
+
+	@touch ./docker-secrets/airflow_sql_alchemy_connection_string.secrets\ postgresql+psycopg2://<AIRFLOW_POSTGRES_USER>:$<AIRFLOW_POSTGRES_PASSWORD>@airflow-postgres/${AIRFLOW_POSTGRES_DB}
+		  ./docker-secrets/minio_secrets.txt\
+		  ./docker-secrets/aiflow_www_user_password.secrets\
+		  ./docker-secrets/superset_secrets.txt
+	@echo "Docker secrets successfully created !"
+
 
 dotenv: ## Generate the project .env file blueprint
 	@echo "Creation of a new '.env' file blueprint"
