@@ -1,14 +1,13 @@
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
-from dotenv import dotenv_values
+from airflow.models.connection import Connection
 from pathlib import Path
 from typing import Any
-import duckdb, os, logging, functools, tomllib,requests, json
+import duckdb, os, logging, functools, tomllib,requests
 
 
-########################################## CONSTANTS ##########################################
+########################################## CONSTANTS/VARIABLES ##########################################
 
 CONFIG_PATH = Path(__file__).parent / "utilities" / "dev-config.toml"
-
 
 
 
@@ -83,16 +82,9 @@ def transform_bronze_data_to_silver(toml_config:dict[str, Any], ds:str):
         s3_hook.delete_objects(bucket=toml_config["STORAGE"]["silver_bucket_name"], 
                                 keys=files_in_silver_partition_path)
         logging.info(f"Deleted existing files in MinIO silver Bucket at prefix: {partition_path}/")
-
+    logging.info(f"Connection = {Connection.get_connection_from_secrets(toml_config["STORAGE"]["airflow_aws_connection_id"]).extra_dejson["endpoint_url"].replace("http://","")}")
     # Opening an in-memory connection to DuckDB while setting up s3 config parameters 
-    with duckdb.connect(config = {
-                                    "s3_access_key_id": dotenv_values("dags/utilities/.env")["MINIO_ROOT_USER"],
-                                    "s3_secret_access_key": dotenv_values("dags/utilities/.env")["MINIO_ROOT_PASSWORD"],
-                                    "s3_endpoint": f"{toml_config["STORAGE"]["minio_docker_service_name"]}:{toml_config["STORAGE"]["minio_s3_api_port"]}",     # MinIO service name as defined in docker-compose file followed by ":{MiniIO_API_Port}" (e.g., "minio:9000"). Do not use "http://" or "https://", and do not use the MinIO Console port.
-                                    "s3_url_style": toml_config["STORAGE"]["duckdb_s3_url_style_config_param"],     # Use "path" URLs style for MinIO and "vhost" for AWS S3
-                                    "s3_use_ssl": toml_config["STORAGE"]["duckdb_s3_use_ssl_config_param"]       # MinIO by default does not use SSL; set to "true" if SSL is configured
-                                }
-    ) as conn:
+    with duckdb.connect(config = get_duckdb_s3_config(toml_config=toml_config)) as conn:
         # Ensure httpfs extension is installed and loaded for interactions between MinIO s3 API and DuckDB
         if conn.sql("SELECT installed FROM duckdb_extensions() where extension_name='httpfs' AND installed='true'").shape[0] == 0:
             conn.execute("INSTALL httpfs;")
@@ -197,14 +189,7 @@ def data_from_silver_to_gold(toml_config:dict[str, Any], ds:str) -> None:
         logging.info(f"Deleted existing files in MinIO Gold Bucket at prefix: {partition_path}/")
 
     # Opening an in-memory connection to DuckDB while setting up s3 config parameters 
-    with duckdb.connect(config = {
-                                    "s3_access_key_id": dotenv_values("dags/utilities/.env")["MINIO_ROOT_USER"],
-                                    "s3_secret_access_key": dotenv_values("dags/utilities/.env")["MINIO_ROOT_PASSWORD"],
-                                    "s3_endpoint": f"{toml_config["STORAGE"]["minio_docker_service_name"]}:{toml_config["STORAGE"]["minio_s3_api_port"]}",     # MinIO service name as defined in docker-compose file followed by ":{MiniIO_API_Port}" (e.g., "minio:9000"). Do not use "http://" or "https://", and do not use the MinIO Console port.
-                                    "s3_url_style": toml_config["STORAGE"]["duckdb_s3_url_style_config_param"],     # Use "path" URLs style for MinIO and "vhost" for AWS S3
-                                    "s3_use_ssl": toml_config["STORAGE"]["duckdb_s3_use_ssl_config_param"]       # MinIO by default does not use SSL; set to "true" if SSL is configured
-                                }
-    ) as conn:
+    with duckdb.connect(config = get_duckdb_s3_config(toml_config=toml_config)) as conn:
         # Ensure httpfs extension is installed and loaded for interactions between MinIO s3 API and DuckDB
         if conn.sql("SELECT installed FROM duckdb_extensions() where extension_name='httpfs' AND installed='true'").shape[0] == 0:
             conn.execute("INSTALL httpfs;")
@@ -337,7 +322,8 @@ def gold_layer_processing(toml_config:dict[str, Any],
 
 
 #
-def get_currencies_rates(currencies_to_convert:list[str], base_currency_code:str="USD") -> dict[str, float]:
+def get_currencies_rates(currencies_to_convert:list[str], 
+                         base_currency_code:str="USD") -> dict[str, float]:
     # [In upper case] : The code of the currency that we have to convert other ones into (Example: if EUR is the base, we have to convert other currencies amounts into EUR before computing)
     api_url = f"https://open.er-api.com/v6/latest/{base_currency_code}"
     exchange_rates = requests.get(api_url).json()["rates"]
@@ -386,5 +372,24 @@ def get_partition_path_blueprint(execution_date:str) ->str:
     return '/'.join(partition_path)
 
 
-def create_FileSensor_connection_informations() -> None:
-    pass
+
+# ===============================================================================================================================================
+
+
+
+def get_duckdb_s3_config(toml_config:dict[str, Any]) -> dict[str, str]:
+    """
+    Returns a preset S3 configuration DuckDB relation object. 
+    The configuration contains all necessary informations for communication between DuckDB engine and S3 API
+    Args:
+        toml_config (dict[str, Any]): The TOML configuration dictionary.
+    Returns:
+        dict[str, str]: A dictionnary containing S3 API connection parameters fro DuckDB
+    """
+    return {
+                "s3_access_key_id": Connection.get_connection_from_secrets(toml_config["STORAGE"]["airflow_aws_connection_id"]).login,
+                "s3_secret_access_key": Connection.get_connection_from_secrets(toml_config["STORAGE"]["airflow_aws_connection_id"]).password,
+                "s3_endpoint": Connection.get_connection_from_secrets(toml_config["STORAGE"]["airflow_aws_connection_id"]).extra_dejson["endpoint_url"].replace("http://",""),     # MinIO service name as defined in docker-compose file followed by ":{MiniIO_API_Port}" (e.g., "minio-server:9008"). Do not use "http://" or "https://", and do not use the MinIO Console port.
+                "s3_url_style": toml_config["STORAGE"]["duckdb_s3_url_style_config_param"],     # Use "path" URLs style for MinIO and "vhost" for AWS S3
+                "s3_use_ssl": toml_config["STORAGE"]["duckdb_s3_use_ssl_config_param"]       # MinIO by default does not use SSL; set to "true" if SSL is configured
+            }

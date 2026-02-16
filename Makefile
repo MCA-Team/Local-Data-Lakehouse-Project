@@ -27,8 +27,8 @@ create-binded-volumes: ## Automatically create the containers binded volumes
 setup-infra: ## Automatically set up the infra by creating the containers, the volumes and the network(s)
 	@docker compose -f docker-compose.yaml up -d
 	@echo "Wait a moment...\n"
-	@sleep 5
-	@docker compose rm -f superset-init minio-create-buckets
+# 	@sleep 5
+# 	@docker compose rm -f superset-init minio-create-buckets
 	@echo "Infrastructure successfully set up !"
 
 shutdown-infra:	## Automatically shutdown the infra removing the containers and the network(s)
@@ -42,7 +42,8 @@ create-docker-secrets:
 	@touch ./docker-secrets/airflow_sql_alchemy_connection_string.secrets\ 
 		  ./docker-secrets/aiflow_www_user_password.secrets\
 		  ./docker-secrets/aiflow_postgres_password.secrets \
-		  ./docker-secrets/ 
+		  ./docker-secrets/minio_root_passwd.secrets \
+		  ./docker-secrets/superset_postgres_password.secrets
 	@echo "postgresql+psycopg2://<AIRFLOW_POSTGRES_USER>:$<AIRFLOW_POSTGRES_PASSWORD>@airflow-postgres/<AIRFLOW_POSTGRES_DB>" >> ./docker-secrets/airflow_sql_alchemy_connection_string.secrets
 	@echo "Docker secrets successfully created !"
 
