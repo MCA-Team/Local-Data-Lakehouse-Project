@@ -54,12 +54,19 @@ x-airflow-common:
   build:
     context: .
     dockerfile: dockerfile.airflow
+  entrypoint: /bin/bash
+  command:
+    - -c
+    - |
+      # Creation of the in-memory connection string variable before launching Airflow (the variable is invisible in "docker inspect" result)
+      export AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=$$(cat /run/secrets/sql_alchemy_connection_string_secret)
+      exec /entrypoint airflow $${AIRFLOW_COMMAND:-version}
+  env_file:
+      path: "./airflow-volumes/airflow_core_variables.env"
+      required: true
   environment:
     &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
-    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${AIRFLOW_POSTGRES_USER}:${AIRFLOW_POSTGRES_PASSWORD}@airflow-postgres/${AIRFLOW_POSTGRES_DB}
-    # For backward compatibility, with Airflow <2.3
-    AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${AIRFLOW_POSTGRES_USER}:${AIRFLOW_POSTGRES_PASSWORD}@airflow-postgres/${AIRFLOW_POSTGRES_DB}
     # AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres/airflow
     # AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
     AIRFLOW__CORE__FERNET_KEY: ''
@@ -87,6 +94,11 @@ x-airflow-common:
     #   condition: service_healthy
     airflow-postgres:
       condition: service_healthy
+  secrets:
+    - sql_alchemy_connection_string_secret
+
+
+
 
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
@@ -117,12 +129,17 @@ x-superset-volumes:
   - superset_home:/app/superset_home
 
 services:
+
+# ================================= DATA ORCHESTRATION WITH APACHE AIRFLOW =================================
   airflow-postgres:
+    env_file:
+      path: "./airflow-volumes/airflow_postgres_variables.env"
+      required: true
     image: postgres:15
     hostname: local-lakehouse-postgres
     environment:
       POSTGRES_USER: ${AIRFLOW_POSTGRES_USER}
-      POSTGRES_PASSWORD: ${AIRFLOW_POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD_FILE: "/run/secrets/airflow_postgres_password"
       POSTGRES_DB: ${AIRFLOW_POSTGRES_DB}
     container_name: airflow-postgres
     ports:
@@ -130,11 +147,13 @@ services:
     volumes:
       - ./airflow-volumes/postgresql-volume:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER}", "-d", "airflow"]
+      test: ["CMD", "pg_isready", "-U", "${AIRFLOW_POSTGRES_USER}", "-d", "airflow"]
       interval: 10s
       retries: 5
       start_period: 5s
     restart: always
+    secrets:
+      - airflow_postgres_password
 
   # redis:
   #   image: redis:latest
@@ -150,7 +169,10 @@ services:
 
   airflow-webserver:
     <<: *airflow-common
-    command: webserver
+    # command: webserver
+    environment:
+      <<: *airflow-common-env
+      AIRFLOW_COMMAND: "webserver"
     ports:
       - "8080:8080"
     container_name: airflow-webserver
@@ -170,7 +192,10 @@ services:
 
   airflow-scheduler:
     <<: *airflow-common
-    command: scheduler
+    # command: scheduler
+    environment:
+      <<: *airflow-common-env
+      AIRFLOW_COMMAND: "scheduler"
     hostname: local-lakehouse-airflow-scheduler
     container_name: airflow-scheduler
     image: airflow-scheduler
@@ -211,7 +236,10 @@ services:
 
   airflow-triggerer:
     <<: *airflow-common
-    command: triggerer
+    # command: triggerer
+    environment:
+      <<: *airflow-common-env
+      AIRFLOW_COMMAND: "triggerer"
     container_name: airflow-triggerer
     image: airflow-triggerer
     healthcheck:
@@ -290,20 +318,30 @@ services:
           echo "   https://airflow.apache.org/docs/apache-airflow/stable/howto/docker-compose/index.html#before-you-begin"
           echo
         fi
+        
+        # Defining an in-memory Connection string variable
+        export AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=$(cat /run/secrets/sql_alchemy_connection_string_secret)
+        if [[ -f /run/secrets/airflow_www_user_password_secret ]]; then
+          export _AIRFLOW_WWW_USER_PASSWORD=$(cat /run/secrets/airflow_www_user_password_secret)
+          echo "Airflow www user password successfully created !"
+        fi
         mkdir -p /sources/logs /sources/dags /sources/plugins
         chown -R "${AIRFLOW_UID}:0" /sources/{logs,dags,plugins}
-        exec /entrypoint airflow version
+        exec /entrypoint airflow db migrate
     # yamllint enable rule:line-length
     environment:
       <<: *airflow-common-env
       _AIRFLOW_DB_MIGRATE: 'true'
       _AIRFLOW_WWW_USER_CREATE: 'true'
-      _AIRFLOW_WWW_USER_USERNAME: ${_AIRFLOW_WWW_USER_USERNAME:-airflow}
-      _AIRFLOW_WWW_USER_PASSWORD: ${_AIRFLOW_WWW_USER_PASSWORD:-airflow}
+      _AIRFLOW_WWW_USER_USERNAME: ${_AIRFLOW_WWW_USER_USERNAME}
+      # _AIRFLOW_WWW_USER_PASSWORD: ${_AIRFLOW_WWW_USER_PASSWORD}
       # _PIP_ADDITIONAL_REQUIREMENTS: ''
     user: "0:0"
     volumes:
       - ${AIRFLOW_PROJ_DIR}:/sources
+    secrets:
+      - airflow_www_user_password_secret
+      - sql_alchemy_connection_string_secret
 
   airflow-cli:
     <<: *airflow-common
@@ -340,22 +378,27 @@ services:
   #     airflow-init:
   #       condition: service_completed_successfully
 
+
+# ================================= DATA STORAGE WITH MINIO AISTOR =================================
+
   minio-aistor:
     image: quay.io/minio/aistor/minio
     container_name: minio-server
     hostname: local-lakehouse-minio
     restart: always
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD_FILE: "/run/secrets/minio_root_passwd"
     ports:
       - "${MINIO_API_PORT:-9000}:${MINIO_API_PORT:-9000}"
       - "${MINIO_CONSOLE_PORT:-9001}:${MINIO_CONSOLE_PORT:-9001}"
-    environment:
-      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minioadmin}
-      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-minioadmin}
     volumes:
       - ./minio-volumes/data:/mnt/data
       - ./minio-volumes/minio.license:/minio.license
       - ./minio-volumes/certs:/etc/minio/certs
     command: ["minio", "server", "/mnt/data", "--console-address", ":${MINIO_CONSOLE_PORT}", "--address", ":${MINIO_API_PORT}", "--license", "/minio.license"]
+    secrets:
+      - minio_root_passwd
 
   minio-create-buckets:
     image: minio/mc:latest
@@ -365,7 +408,7 @@ services:
     entrypoint: >
       /bin/sh -c "
       sleep 5;
-      mc alias set local-lakehouse http://aistor-server:${MINIO_API_PORT} ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:-minioadmin};
+      mc alias set local-lakehouse http://minio-aistor:${MINIO_API_PORT} ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:-minioadmin};
       mc mb --ignore-existing local-lakehouse/${MINIO_BRONZE_BUCKET_NAME:-bronze};
       mc mb --ignore-existing local-lakehouse/${MINIO_SILVER_BUCKET_NAME:-silver};
       mc mb --ignore-existing local-lakehouse/${MINIO_GOLD_BUCKET_NAME:-gold};
@@ -391,12 +434,14 @@ services:
     hostname: local-lakehouse-superset-metadata
     environment:
       POSTGRES_USER: ${SUPERSET_POSTGRES_USER}
-      POSTGRES_PASSWORD: ${SUPERSET_POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD_FILE: "/run/secrets/superset_postgres_password"
       POSTGRES_DB: ${SUPERSET_POSTGRES_DB}
     restart: unless-stopped
     volumes:
       - superset_metadata_db_volume:/var/lib/postgresql/data
       - ./apache-superset-files/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
+    secrets:
+      - superset_postgres_password
 
   superset:
     env_file:
@@ -479,6 +524,18 @@ services:
     environment:
       SUPERSET_LOG_LEVEL: "${SUPERSET_LOG_LEVEL:-info}"
 
+
+secrets:
+  sql_alchemy_connection_string_secret:
+    file: "./docker-secrets/airflow_sql_alchemy_connection_string.secrets"
+  airflow_www_user_password_secret:
+    file: "./docker-secrets/airflow_www_user_password.secrets"
+  airflow_postgres_password:
+    file: "./docker-secrets/airflow_postgres_password.secrets"
+  minio_root_passwd:
+    file: "./docker-secrets/minio_root_passwd.secrets"
+  superset_postgres_password:
+    file: "./docker-secrets/superset_postgres_password.secrets"
 
 volumes:
   postgresql-volume:
