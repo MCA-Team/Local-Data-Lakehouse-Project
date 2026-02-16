@@ -39,10 +39,11 @@ create-docker-secrets:
 		mkdir ./docker-secrets;\
 	fi
 
-	@touch ./docker-secrets/airflow_sql_alchemy_connection_string.secrets\ postgresql+psycopg2://<AIRFLOW_POSTGRES_USER>:$<AIRFLOW_POSTGRES_PASSWORD>@airflow-postgres/${AIRFLOW_POSTGRES_DB}
-		  ./docker-secrets/minio_secrets.txt\
+	@touch ./docker-secrets/airflow_sql_alchemy_connection_string.secrets\ 
 		  ./docker-secrets/aiflow_www_user_password.secrets\
-		  ./docker-secrets/superset_secrets.txt
+		  ./docker-secrets/aiflow_postgres_password.secrets \
+		  ./docker-secrets/ 
+	@echo "postgresql+psycopg2://<AIRFLOW_POSTGRES_USER>:$<AIRFLOW_POSTGRES_PASSWORD>@airflow-postgres/<AIRFLOW_POSTGRES_DB>" >> ./docker-secrets/airflow_sql_alchemy_connection_string.secrets
 	@echo "Docker secrets successfully created !"
 
 
