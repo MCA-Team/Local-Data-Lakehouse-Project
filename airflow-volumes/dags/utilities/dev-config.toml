@@ -25,6 +25,5 @@ duckdb_s3_use_ssl_config_param = "false"
 fileSensor_connection_id = "fs_conn"
 checking_raw_json_files_existence_poke_interval = 10
 checking_raw_json_files_existence_timeout = 30
-checking_raw_json_files_existence_file_pattern = "sales_*"
-checking_raw_json_files_existence_file_path = "/opt/airflow/local-data/"
+checking_raw_json_files_existence_file_pattern = "sales*"
 gold_bucket_base_currency = "EUR"
