@@ -10,7 +10,7 @@ create-binded-volumes: ## Automatically create the containers binded volumes
 							"airflow-volumes/logs" \
 							"airflow-volumes/config" \
 							"airflow-volumes/plugins" \
-							"airflow-volumes/postgresql-volume" \
+							"airflow-volumes/metadata-postgres-volume" \
 							"minio-volumes/data" \
 							"minio-volumes/certs"; \
 	do \
@@ -22,6 +22,8 @@ create-binded-volumes: ## Automatically create the containers binded volumes
 			echo "$$directory_name directory already exists"; \
 		fi \
 	done
+	@echo "============================================================="
+	@echo "All binded volumes created"
 	
 	
 setup-infra: ## Automatically set up the infra by creating the containers, the volumes and the network(s)
@@ -35,22 +37,30 @@ shutdown-infra:	## Automatically shutdown the infra removing the containers and 
 	@docker compose down
 
 create-docker-secrets:
-	@if [ ! -d "docker-secrets" ]; then\
+	@if [ ! -d "./docker-secrets/" ]; then\
 		mkdir ./docker-secrets;\
+	else\
+		for directory_name in "./docker-secrets/airflow/" \
+							  "./docker-secrets/minio/" \
+							  "./docker-secrets/superset/"; \
+		do \
+			if [ ! -d "$$directory_name" ]; then\
+				mkdir -p $$directory_name;\
+			fi\
+		done \
 	fi
 
-	@touch ./docker-secrets/airflow_sql_alchemy_connection_string.secrets\ 
-		  ./docker-secrets/aiflow_www_user_password.secrets\
-		  ./docker-secrets/aiflow_postgres_password.secrets \
-		  ./docker-secrets/minio_root_passwd.secrets \
-		  ./docker-secrets/superset_postgres_password.secrets
-	@echo "postgresql+psycopg2://<AIRFLOW_POSTGRES_USER>:$<AIRFLOW_POSTGRES_PASSWORD>@airflow-postgres/<AIRFLOW_POSTGRES_DB>" >> ./docker-secrets/airflow_sql_alchemy_connection_string.secrets
+	@touch ./docker-secrets/airflow/airflow_www_user_password.secrets\
+		   ./docker-secrets/airflow/airflow_metadata_postgres_password.secrets \
+		   ./docker-secrets/minio/minio_root_passwd.secrets \
+		   ./docker-secrets/superset/superset_postgres_password.secrets
+	@echo "postgresql+psycopg2://<AIRFLOW_POSTGRES_USER>:$<AIRFLOW_POSTGRES_PASSWORD>@airflow-postgres/<AIRFLOW_POSTGRES_DB>" >> ./docker-secrets/airflow/airflow_sql_alchemy_connection_string.secrets
 	@echo "Docker secrets successfully created !"
 
 
 dotenv: ## Generate the project .env file blueprint
 	@echo "Creation of a new '.env' file blueprint"
-	@echo "AIRFLOW_UID=1000\n\
+	@echo "AIRFLOW_UID=$$(id)\n\
 AIRFLOW_PROJ_DIR=./airflow-volumes\n\
 LOCAL_DATA_DIR=./data\n\
 # AIRFLOW WEBSERVER CREDENTIALS\n\
