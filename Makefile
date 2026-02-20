@@ -30,7 +30,7 @@ setup-infra: ## Automatically set up the infra by creating the containers, the v
 	@docker compose -f docker-compose.yaml up -d
 	@echo "Wait a moment...\n"
 # 	@sleep 5
-# 	@docker compose rm -f superset-init minio-create-buckets
+# 	@docker compose rm -f superset-init minio-autocreate-buckets
 	@echo "Infrastructure successfully set up !"
 
 shutdown-infra:	## Automatically shutdown the infra removing the containers and the network(s)
