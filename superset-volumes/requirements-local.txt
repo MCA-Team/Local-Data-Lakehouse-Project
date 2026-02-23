@@ -1,0 +1,2 @@
+duckdb-engine==0.17.0
+duckdb==1.4.3
