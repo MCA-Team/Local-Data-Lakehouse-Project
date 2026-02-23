@@ -511,7 +511,7 @@ services:
       disable: true
     environment:
       <<: *superset-core-common-env
-      SUPERSET_LOG_LEVEL: "${SUPERSET_LOG_LEVEL:-info}"
+      SUPERSET_LOAD_EXAMPLES: "${SUPERSET_LOAD_EXAMPLES:-yes}"
 
   superset-worker:
     <<: *superset-core-common
