@@ -13,6 +13,9 @@ mongodb-volume/*
 minio.license
 minio-volumes/data/*
 minio-volumes/certs/*
+superset-volumes/cache-redis-volume
+superset-volumes/metadata-postgres-volume
+superset-volumes/superset_home
 data/*
 docker-secrets/*
 
