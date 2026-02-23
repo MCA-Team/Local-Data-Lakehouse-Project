@@ -60,6 +60,7 @@ x-airflow-common:
     - |
       # Creation of the in-memory connection string variable before launching Airflow (the variable is invisible in "docker inspect" output)
       export AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=$$(cat /run/secrets/sql_alchemy_connection_string_secret)
+      sleep 2
       exec /entrypoint airflow $${AIRFLOW_COMMAND}
   environment:
     &airflow-common-env
@@ -89,7 +90,7 @@ x-airflow-common:
     &airflow-common-depends-on
     # redis:
     #   condition: service_healthy
-    airflow-metadata-database:
+    airflow-metadata-db:
       condition: service_healthy
   secrets:
     - sql_alchemy_connection_string_secret
@@ -101,11 +102,16 @@ x-airflow-common:
 # create you own docker environment file (docker/.env) with your own
 # unique random secure passwords and SECRET_KEY.
 # -------------------------------APACHE SUPERSET----------------------------------------
-x-superset-image: &superset-image apachesuperset.docker.scarf.sh/apache/superset:${SUPERSET_IMAGE_TAG:-latest-dev}
-x-superset-volumes:
-  &superset-volumes # "/app/pythonpath_docker" will be appended to the PYTHONPATH in the final container
-  - ./apache-superset-volumes:/app/docker
-  - superset_home:/app/superset_home
+x-superset-core-common: 
+  &superset-core-common
+  image: apachesuperset.docker.scarf.sh/apache/superset:${SUPERSET_IMAGE_TAG:-latest-dev}
+  volumes:
+  # "/app/pythonpath_docker" will be appended to the PYTHONPATH in the final container
+  - ./superset-volumes:/app/docker
+  - ./superset-volumes/superset_home:/app/superset_home
+  environment:
+    &superset-core-common-env
+    SUPERSET_LOG_LEVEL: "${SUPERSET_LOG_LEVEL:-info}"
 
 
 # -------------------------------MINIO AISTOR----------------------------------
@@ -122,14 +128,15 @@ x-minio-common:
       - minio_root_passwd
   
 
+# ************************************** DOCKER SERVICES **************************************
 services:
 # ================================= DATA ORCHESTRATION WITH APACHE AIRFLOW =================================
-  airflow-metadata-database:
+  airflow-metadata-db:
     env_file:
       - path: "./airflow-volumes/airflow_metadata_postgres_variables.env"
         required: true
     image: postgres:15
-    hostname: local-lakehouse-airflow-metadata-database
+    hostname: local-lakehouse-airflow-metadata-db
     environment:
       POSTGRES_PASSWORD_FILE: "/run/secrets/airflow_metadata_postgres_password"
     container_name: airflow-metadata-postgres
@@ -209,7 +216,11 @@ services:
     container_name: airflow-triggerer
     image: airflow-triggerer
     healthcheck:
-      test: ["CMD-SHELL", 'airflow jobs check --job-type TriggererJob --hostname "$${HOSTNAME}"']
+      test: [
+              "CMD-SHELL", 
+              'export AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=$$(cat /run/secrets/sql_alchemy_connection_string_secret) && 
+              airflow jobs check --job-type TriggererJob --hostname "$${HOSTNAME}"'
+            ]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -288,7 +299,7 @@ services:
         fi
         
         # Defining an in-memory Connection string variable
-        export AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=$(cat /run/secrets/sql_alchemy_connection_string_secret)
+        export AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=$$(cat /run/secrets/sql_alchemy_connection_string_secret)
         if [[ -f /run/secrets/airflow_www_user_password_secret ]]; then
           export _AIRFLOW_WWW_USER_PASSWORD=$(cat /run/secrets/airflow_www_user_password_secret)
           echo "Airflow www user password successfully created !"
@@ -325,7 +336,6 @@ services:
 
   # airflow-worker:
   #   <<: *airflow-common
-  #   command: celery worker
   #   healthcheck:
   #     # yamllint disable rule:line-length
   #     test:
@@ -337,9 +347,12 @@ services:
   #     start_period: 30s
   #   environment:
   #     <<: *airflow-common-env
+  #     AIRFLOW_COMMAND: "celery worker"
   #     # Required to handle warm shutdown of the celery workers properly
   #     # See https://airflow.apache.org/docs/docker-stack/entrypoint.html#signal-propagation
   #     DUMB_INIT_SETSID: "0"
+  #   hostname: local-lakehouse-airflow-worker
+  #   container_name: airflow-worker
   #   restart: always
   #   depends_on:
   #     <<: *airflow-common-depends-on
@@ -385,7 +398,18 @@ services:
       - ${MINIO_PROJ_DIR}/data:/mnt/data
       - ${MINIO_PROJ_DIR}/minio.license:/minio.license
       - ${MINIO_PROJ_DIR}/certs:/etc/minio/certs
-    command: ["minio", "server", "/mnt/data", "--console-address", ":${MINIO_CONSOLE_PORT}", "--address", ":${MINIO_API_PORT}", "--license", "/minio.license"]
+    command: [
+              "minio", "server", "/mnt/data", 
+              "--console-address", ":${MINIO_CONSOLE_PORT}", 
+              "--address", ":${MINIO_API_PORT}", 
+              "--license", "/minio.license"
+              ]
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail http://minio-aistor-server:${MINIO_API_PORT}/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 5s
     
 
   minio-autocreate-buckets:
@@ -409,43 +433,52 @@ services:
 
 # ================================= BI WITH APACHE SUPERSET =================================
 
-  superset-cache-redis:
+  superset-cache-database:
       image: redis:7
-      container_name: superset_cache
-      hostname: local-lakehouse-superset-cache
+      container_name: superset-cache-redis
+      hostname: local-lakehouse-superset-cache-database
       ports:
-      - "${REDIS_PORT}:${REDIS_PORT}"
+        - "${REDIS_PORT}:${REDIS_PORT}"
+      healthcheck:
+        test: ["CMD", "redis-cli", "--raw", "ping", "Redis is healthy"]
+        interval: 30s
+        timeout: 10s
+        retries: 5
+        start_period: 5s
       restart: unless-stopped
       volumes:
-        - superset_redis_cache_volume:/data
+        - ./superset-volumes/cache-redis-volume:/data
 
-  superset-metadata-pgsql:
+  superset-metadata-db:
     env_file:
-      - path: .env # default
+      - path: ./superset-volumes/superset_metadata_postgres_variables.env
         required: true
     image: postgres:15
-    container_name: superset_db
-    hostname: local-lakehouse-superset-metadata
+    container_name: superset-metadata-postgres
+    hostname: local-lakehouse-superset-metadata-db
     ports:
       - "5433:${DATABASE_PORT}"
     environment:
-      POSTGRES_USER: ${SUPERSET_POSTGRES_USER}
       POSTGRES_PASSWORD_FILE: "/run/secrets/superset_postgres_password"
-      POSTGRES_DB: ${SUPERSET_POSTGRES_DB}
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      retries: 5
+      start_period: 5s
     volumes:
-      - superset_metadata_db_volume:/var/lib/postgresql/data
-      - ./apache-superset-volumes/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
+      - ./superset-volumes/metadata-postgres-volume:/var/lib/postgresql/data
+      - ./superset-volumes/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
     secrets:
       - superset_postgres_password
 
   superset:
+    <<: *superset-core-common
     env_file:
-      - path: .env # default
+      - path: ./superset-volumes/superset_core_variables.env
         required: true
-    image: *superset-image
-    container_name: superset_app
-    hostname: local-lakehouse-superset-app
+    container_name: superset-webapp
+    hostname: local-lakehouse-superset-webapp
     command: ["/app/docker/docker-bootstrap.sh", "app-gunicorn"]
     user: "root"
     restart: unless-stopped
@@ -454,74 +487,75 @@ services:
     depends_on:
       superset-init:
         condition: service_completed_successfully
-    volumes: *superset-volumes
-    environment:
-      SUPERSET_LOG_LEVEL: "${SUPERSET_LOG_LEVEL:-info}"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://superset:8088/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
 
   superset-init:
-    image: *superset-image
+    <<: *superset-core-common
     container_name: superset-init
     command: ["/app/docker/docker-init.sh"]
     env_file:
-      - path: .env # default
+      - path: ./superset-volumes/superset_core_variables.env
         required: true
     depends_on:
-      superset-metadata-pgsql:
+      superset-metadata-db:
         condition: service_started
-      superset-cache-redis:
+      superset-cache-database:
         condition: service_started
     user: "root"
-    volumes: *superset-volumes
     healthcheck:
       disable: true
     environment:
-      SUPERSET_LOAD_EXAMPLES: "${SUPERSET_LOAD_EXAMPLES:-yes}"
+      <<: *superset-core-common-env
       SUPERSET_LOG_LEVEL: "${SUPERSET_LOG_LEVEL:-info}"
 
   superset-worker:
-    image: *superset-image
-    container_name: superset_worker
+    <<: *superset-core-common
+    container_name: superset-worker
     hostname: local-lakehouse-superset-worker
     command: ["/app/docker/docker-bootstrap.sh", "worker"]
     env_file:
-      - path: .env # default
+      - path: ./superset-volumes/superset_core_variables.env
         required: true
     restart: unless-stopped
     depends_on:
       superset-init:
         condition: service_completed_successfully
     user: "root"
-    volumes: *superset-volumes
     healthcheck:
       test:
         [
           "CMD-SHELL",
           "celery -A superset.tasks.celery_app:app inspect ping -d celery@$$HOSTNAME"
         ]
-    environment:
-      SUPERSET_LOG_LEVEL: "${SUPERSET_LOG_LEVEL:-info}"
 
   superset-worker-beat:
-    image: *superset-image
-    container_name: superset_worker_beat
-    hostname: local-lakehouse-superset-beat
+    <<: *superset-core-common
+    container_name: superset-worker-beat
+    hostname: local-lakehouse-superset-worker-beat
     command: ["/app/docker/docker-bootstrap.sh", "beat"]
     env_file:
-      - path: .env # default
+      - path: ./superset-volumes/superset_core_variables.env
         required: true
     restart: unless-stopped
     depends_on:
       superset-init:
         condition: service_completed_successfully
     user: "root"
-    volumes: *superset-volumes
     healthcheck:
-      disable: true
-    environment:
-      SUPERSET_LOG_LEVEL: "${SUPERSET_LOG_LEVEL:-info}"
+      test:
+        [
+          "CMD-SHELL", 
+          "python3 -c 'import subprocess; exit(0) if b'celery beat' in subprocess.check_output(['ps', 'aux']) else exit(1)'"
+        ]
+    
 
 
-# ================================= DOCKER SECRETS =================================
+# ************************************** DOCKER SECRETS **************************************
 secrets:
   sql_alchemy_connection_string_secret:
     file: "./docker-secrets/airflow/airflow_sql_alchemy_connection_string.secrets"
@@ -535,7 +569,7 @@ secrets:
     file: "./docker-secrets/superset/superset_postgres_password.secrets"
 
 
-# ================================= DOCKER VOLUMES =================================
+# ************************************** DOCKER VOLUMES **************************************
 volumes:
   postgresql-volume:
   superset_home:
