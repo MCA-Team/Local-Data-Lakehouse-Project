@@ -12,7 +12,10 @@ create-binded-volumes: ## Automatically create the containers binded volumes
 							"airflow-volumes/plugins" \
 							"airflow-volumes/metadata-postgres-volume" \
 							"minio-volumes/data" \
-							"minio-volumes/certs"; \
+							"minio-volumes/certs" \
+							"superset-volumes/cache-redis-volume" \
+							"superset-volumes/metadata-postgres-volume" \
+							"superset-volumes/superset_home"; \
 	do \
 		if [ ! -d "$$directory_name" ]; then \
 			echo "Creation of $$directory_name directory"; \
