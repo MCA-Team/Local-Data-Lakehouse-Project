@@ -112,6 +112,8 @@ x-superset-core-common:
   environment:
     &superset-core-common-env
     SUPERSET_LOG_LEVEL: "${SUPERSET_LOG_LEVEL:-info}"
+  secrets:
+    - superset_postgres_password
 
 
 # -------------------------------MINIO AISTOR----------------------------------
@@ -509,9 +511,9 @@ services:
     user: "root"
     healthcheck:
       disable: true
-    environment:
-      <<: *superset-core-common-env
-      SUPERSET_LOAD_EXAMPLES: "${SUPERSET_LOAD_EXAMPLES:-yes}"
+    secrets:
+      - superset_postgres_password
+      - superset_admin_password
 
   superset-worker:
     <<: *superset-core-common
@@ -547,11 +549,7 @@ services:
         condition: service_completed_successfully
     user: "root"
     healthcheck:
-      test:
-        [
-          "CMD-SHELL", 
-          "python3 -c 'import subprocess; exit(0) if b'celery beat' in subprocess.check_output(['ps', 'aux']) else exit(1)'"
-        ]
+      disable: true
     
 
 
@@ -567,6 +565,8 @@ secrets:
     file: "./docker-secrets/minio/minio_root_passwd.secrets"
   superset_postgres_password:
     file: "./docker-secrets/superset/superset_postgres_password.secrets"
+  superset_admin_password:
+    file: "./docker-secrets/superset/superset_admin_password.secrets"
 
 
 # ************************************** DOCKER VOLUMES **************************************
