@@ -1,11 +1,11 @@
-.PHONY: help create-binded-volumes dotenv setup-infra shutdown-infra
+.PHONY: help create-binded-volumes setup-infra shutdown-infra create-docker-secrets airflow-dotenv minio-dotenv superset-dotenv dotenv
 .DEFAULT_GOAL = help
 
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-24s\033[0m %s\n", $$1, $$2}'
 
-create-binded-volumes: ## Automatically create the containers binded volumes
+create-binded-volumes: ## Automatically creates the containers binded volumes
 	@for directory_name in "airflow-volumes/dags" \
 							"airflow-volumes/logs" \
 							"airflow-volumes/config" \
@@ -29,17 +29,17 @@ create-binded-volumes: ## Automatically create the containers binded volumes
 	@echo "All binded volumes created"
 	
 	
-setup-infra: ## Automatically set up the infra by creating the containers, the volumes and the network(s)
+setup-infra: ## Automatically sets up the infra by creating the containers, the volumes and the network(s)
 	@docker compose -f docker-compose.yaml up -d
 	@echo "Wait a moment...\n"
 # 	@sleep 5
 # 	@docker compose rm -f superset-init minio-autocreate-buckets
 	@echo "Infrastructure successfully set up !"
 
-shutdown-infra:	## Automatically shutdown the infra removing the containers and the network(s)
+shutdown-infra:	## Automatically shuts down the infra removing the containers and the network(s)
 	@docker compose down
 
-create-docker-secrets:
+create-docker-secrets:	## Automatically creates '.secrets' files in order to store docker container's sensitive information
 	@if [ ! -d "./docker-secrets/" ]; then\
 		mkdir ./docker-secrets;\
 	else\
@@ -56,102 +56,64 @@ create-docker-secrets:
 	@touch ./docker-secrets/airflow/airflow_www_user_password.secrets\
 		   ./docker-secrets/airflow/airflow_metadata_postgres_password.secrets \
 		   ./docker-secrets/minio/minio_root_passwd.secrets \
-		   ./docker-secrets/superset/superset_postgres_password.secrets
+		   ./docker-secrets/superset/superset_postgres_password.secrets \
+		   ./docker-secrets/superset/superset_admin_password.secrets
 	@echo "postgresql+psycopg2://<AIRFLOW_POSTGRES_USER>:$<AIRFLOW_POSTGRES_PASSWORD>@airflow-postgres/<AIRFLOW_POSTGRES_DB>" >> ./docker-secrets/airflow/airflow_sql_alchemy_connection_string.secrets
 	@echo "Docker secrets successfully created !"
 
+airflow-dotenv: ## Generates all required .env files for Apache Airflow containers
+	@echo "Creation of new './airflow-volumes/airflow_core_variables.env' file
+	@echo "# AIRFLOW CORE ENV. VARIABLES\n\
+_AIRFLOW_WWW_USER_USERNAME=airflow" > ./airflow-volumes/airflow_core_variables.env
 
-dotenv: ## Generate the project .env file blueprint
-	@echo "Creation of a new '.env' file blueprint"
-	@echo "AIRFLOW_UID=$$(id)\n\
-AIRFLOW_PROJ_DIR=./airflow-volumes\n\
-LOCAL_DATA_DIR=./data\n\
-# AIRFLOW WEBSERVER CREDENTIALS\n\
-_AIRFLOW_WWW_USER_USERNAME=\n\
-_AIRFLOW_WWW_USER_PASSWORD=\n\
-# POSTGRES DATABASE CREDENTIALS\n\
-AIRFLOW_POSTGRES_USER=\n\
-AIRFLOW_POSTGRES_PASSWORD=\n\
-AIRFLOW_POSTGRES_DB=airflow\n\
-AIRFLOW_POSTGRES_PORT=5432\n\
-#MINIO AISTOR CREDENTIALS (ROOT_USER >= 3 CHARACTERS, ROOT_PASSWORD >= 8 CHARACTERS)\n\
-MINIO_ROOT_USER=\n\
-MINIO_ROOT_PASSWORD=\n\
-# MINIO PORTS AND BUCKETS NAME\n\
-MINIO_API_PORT=9008\n\
-MINIO_CONSOLE_PORT=9009\n\
+	@echo "Creation of new './airflow-volumes/airflow_metadata_postgres_variables.env' file
+	@echo "# AIRFLOW POSTGRES METADATA DATABASE ENV. VARIABLES\n\
+POSTGRES_USER=airflow\n\
+POSTGRES_DB=airflow" > ./airflow-volumes/airflow_metadata_postgres_variables.env
+	@echo "Successfully done"
+
+minio-dotenv: ## Generates all required .env files for MinIO AIStor containers
+	@echo "Creation of new './minio-volumes/minio_variables.env' files Airflow containers"
+	@echo "# MINIO AISTOR CORE ENV. VARIABLES\n\
 MINIO_BRONZE_BUCKET_NAME=bronze\n\
 MINIO_SILVER_BUCKET_NAME=silver\n\
 MINIO_GOLD_BUCKET_NAME=gold\n\
 \n\
+#MINIO AISTOR CREDENTIALS (ROOT_USER >= 3 CHARACTERS)\n\
+MINIO_ROOT_USER=airflow" > ./minio-volumes/minio_variables.env
+	@echo "Successfully done"
+
+# superset-dotenv: ## Generates all required .env files for Apache Superset containers
+# 	@echo "Creation of new '.env' files Airflow containers"
+# 	@echo "" > t.env
+# 	@echo "Successfully done"
+
+
+dotenv: ## Generates the main project's .env file blueprint
+	@echo "Creation of a new main '.env' file blueprint"
+	@echo "# ==================================== DATA ORCHESTRATION COMPONENTS ENVIRONMENT VARIABLES ====================================\n\
+#Base path to which all the files will be volumed | Default: .\n\
+AIRFLOW_PROJ_DIR=./airflow-volumes\n\
+#User ID in Airflow containers. Automatically generated through the command \"id -u\" when running the commande \"make dotenv\"  | Default: 50000\n\
+AIRFLOW_UID=$$(id -u)\n\
+#Path to the local directory where raw json files will be uploaded for ingestion in the Bronze bucket. Mount as a volume to "/opt/airflow/local-data" internal directory inside airflow containers\n\
+LOCAL_DATA_DIR=./data\n\
+# Exposed port for Airflow's Postgres metadata database\n\
+AIRFLOW_POSTGRES_PORT=5432\n\
 \n\
-#\n\
-# Licensed to the Apache Software Foundation (ASF) under one or more\n\
-# contributor license agreements.  See the NOTICE file distributed with\n\
-# this work for additional information regarding copyright ownership.\n\
-# The ASF licenses this file to You under the Apache License, Version 2.0\n\
-# (the "License"); you may not use this file except in compliance with\n\
-# the License.  You may obtain a copy of the License at\n\
-#\n\
-#    http://www.apache.org/licenses/LICENSE-2.0\n\
-#\n\
-# Unless required by applicable law or agreed to in writing, software\n\
-# distributed under the License is distributed on an "AS IS" BASIS,\n\
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n\
-# See the License for the specific language governing permissions and\n\
-# limitations under the License.\n\
-#\n\
+# ==================================== DATA STORAGE COMPONENTS ENVIRONMENT VARIABLES ====================================\n\
+#Base path to which all the files will be volumed\n\
+MINIO_PROJ_DIR=./minio-volumes\n\
+# Exposed port for MinIO's API\n\
+MINIO_API_PORT=9008\n\
+# Exposed port for MinIO's web console\n\
+MINIO_CONSOLE_PORT=9009\n\
 \n\
-# Allowing python to print() in docker\n\
-PYTHONUNBUFFERED=1\n\
-\n\
-COMPOSE_PROJECT_NAME=local-data-lakehouse-project\n\
-DEV_MODE=true\n\
-\n\
-# database configurations (do not modify)\n\
-SUPERSET_DATABASE_DB=superset\n\
-SUPERSET_DATABASE_HOST=superset-metadata-pgsql\n\
-# Make sure you set this to a unique secure random value on production\n\
-DATABASE_PASSWORD=superset\n\
-DATABASE_USER=superset\n\
-\n\
-EXAMPLES_DB=examples\n\
-EXAMPLES_HOST=superset-metadata-pgsql\n\
-EXAMPLES_USER=examples\n\
-# Make sure you set this to a unique secure random value on production\n\
-EXAMPLES_PASSWORD=examples\n\
-EXAMPLES_PORT=5432\n\
-\n\
-# database engine specific environment variables\n\
-# change the below if you prefer another database engine\n\
+# ==================================== BI COMPONENTS ENVIRONMENT VARIABLES ====================================\n\
+# Apache Superset docker image's version used\n\
+SUPERSET_IMAGE_TAG=6.0.0\n\
+# Exposed port for Superset's Postgres metadata database\n\
 DATABASE_PORT=5432\n\
-DATABASE_DIALECT=postgresql\n\
-SUPERSET_POSTGRES_DB=superset\n\
-SUPERSET_POSTGRES_USER=superset\n\
-# Make sure you set this to a unique secure random value on production\n\
-SUPERSET_POSTGRES_PASSWORD=superset\n\
-#MYSQL_DATABASE=superset\n\
-#MYSQL_USER=superset\n\
-#MYSQL_PASSWORD=superset\n\
-#MYSQL_RANDOM_ROOT_PASSWORD=yes\n\
-\n\
-# Add the mapped in /app/pythonpath_docker which allows devs to override stuff\n\
-PYTHONPATH=/app/pythonpath:/app/apache-superset-files/pythonpath_dev\n\
-REDIS_HOST=redis\n\
-REDIS_PORT=6379\n\
-\n\
-FLASK_DEBUG=true\n\
-SUPERSET_ENV=development\n\
-SUPERSET_LOAD_EXAMPLES=no\n\
-CYPRESS_CONFIG=false\n\
-SUPERSET_PORT=8088\n\
-MAPBOX_API_KEY=''\n\
-\n\
-# Make sure you set this to a unique secure random value on production\n\
-SUPERSET_SECRET_KEY=TEST_NON_DEV_SECRET\n\
-\n\
-ENABLE_PLAYWRIGHT=false\n\
-PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true\n\
-BUILD_SUPERSET_FRONTEND_IN_DOCKER=true\n\
-SUPERSET_LOG_LEVEL=info" > t.env
+# Exposed port for Superset's Redis cache database\n\
+REDIS_PORT=6379" > t.env
 	@echo "Successfully done"
