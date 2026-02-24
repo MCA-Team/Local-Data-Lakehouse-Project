@@ -31,10 +31,12 @@ logger = logging.getLogger()
 
 DATABASE_DIALECT = os.getenv("DATABASE_DIALECT")
 DATABASE_USER = os.getenv("DATABASE_USER")
-DATABASE_PASSWORD = os.getenv("DATABASE_PASSWORD")
 DATABASE_HOST = os.getenv("SUPERSET_DATABASE_HOST")
 DATABASE_PORT = os.getenv("DATABASE_PORT")
 DATABASE_DB = os.getenv("SUPERSET_DATABASE_DB")
+# DATABASE_PASSWORD = os.getenv("DATABASE_PASSWORD")
+with open("/run/secrets/superset_postgres_password", "r") as password_file:
+    DATABASE_PASSWORD = password_file.read()
 
 EXAMPLES_USER = os.getenv("EXAMPLES_USER")
 EXAMPLES_PASSWORD = os.getenv("EXAMPLES_PASSWORD")
