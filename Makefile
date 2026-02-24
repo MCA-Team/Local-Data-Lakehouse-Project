@@ -32,7 +32,7 @@ create-binded-volumes: ## Automatically creates the containers binded volumes
 setup-infra: ## Automatically sets up the infra by creating the containers, the volumes and the network(s)
 	@docker compose -f docker-compose.yaml up -d
 	@echo "Wait a moment...\n"
-# 	@sleep 5
+	@sleep 5
 # 	@docker compose rm -f superset-init minio-autocreate-buckets
 	@echo "Infrastructure successfully set up !"
 
@@ -52,7 +52,6 @@ create-docker-secrets:	## Automatically creates '.secrets' files in order to sto
 			fi\
 		done \
 	fi
-
 	@touch ./docker-secrets/airflow/airflow_www_user_password.secrets\
 		   ./docker-secrets/airflow/airflow_metadata_postgres_password.secrets \
 		   ./docker-secrets/minio/minio_root_passwd.secrets \
@@ -65,7 +64,6 @@ airflow-dotenv: ## Generates all required .env files for Apache Airflow containe
 	@echo "Creation of new './airflow-volumes/airflow_core_variables.env' file
 	@echo "# AIRFLOW CORE ENV. VARIABLES\n\
 _AIRFLOW_WWW_USER_USERNAME=airflow" > ./airflow-volumes/airflow_core_variables.env
-
 	@echo "Creation of new './airflow-volumes/airflow_metadata_postgres_variables.env' file
 	@echo "# AIRFLOW POSTGRES METADATA DATABASE ENV. VARIABLES\n\
 POSTGRES_USER=airflow\n\
@@ -73,7 +71,7 @@ POSTGRES_DB=airflow" > ./airflow-volumes/airflow_metadata_postgres_variables.env
 	@echo "Successfully done"
 
 minio-dotenv: ## Generates all required .env files for MinIO AIStor containers
-	@echo "Creation of new './minio-volumes/minio_variables.env' files Airflow containers"
+	@echo "Creation of new './minio-volumes/minio_variables.env' file"
 	@echo "# MINIO AISTOR CORE ENV. VARIABLES\n\
 MINIO_BRONZE_BUCKET_NAME=bronze\n\
 MINIO_SILVER_BUCKET_NAME=silver\n\
@@ -83,10 +81,65 @@ MINIO_GOLD_BUCKET_NAME=gold\n\
 MINIO_ROOT_USER=airflow" > ./minio-volumes/minio_variables.env
 	@echo "Successfully done"
 
-# superset-dotenv: ## Generates all required .env files for Apache Superset containers
-# 	@echo "Creation of new '.env' files Airflow containers"
-# 	@echo "" > t.env
-# 	@echo "Successfully done"
+superset-dotenv: ## Generates all required .env files for Apache Superset containers
+	@echo "Creation of new './superset-volumes/superset_metadata_postgres_variables.env' file"
+	@echo "# SUPERSET POSTGRES METADATA DATABASE ENV. VARIABLES\n\
+\n\
+# database configurations (do not modify)\n\
+POSTGRES_USER=superset\n\
+POSTGRES_DB=superset\n\
+# Cypress testing db credentials\n\
+EXAMPLES_DB=examples\n\
+EXAMPLES_USER=examples\n\
+EXAMPLES_PASSWORD=examples" > ./superset-volumes/superset_metadata_postgres_variables.env
+	@echo "Creation of new './superset-volumes/superset_core_variables.env' file"
+	@echo "# SUPERSET CORE ENV. VARIABLES\n\
+\n\
+# Allowing python to print() in docker\n\
+PYTHONUNBUFFERED=1\n\
+# Allowing development environment mode\n\
+DEV_MODE=true\n\
+# Superset Admin credentials\n\
+ADMIN_USER=mca-adm29\n\
+ADMIN_EMAIL=mca.admin@superset.com\n\
+ADMIN_FIRSTNAME=Mattheo\n\
+ADMIN_LASTNAME=Polnareff\n\
+# Superset metadata postgres database configurations\n\
+SUPERSET_DATABASE_DB=superset\n\
+SUPERSET_DATABASE_HOST=superset-metadata-db\n\
+DATABASE_USER=superset\n\
+# Cypress example DB credentials\n\
+EXAMPLES_DB=examples\n\
+EXAMPLES_HOST=superset-metadata-db\n\
+EXAMPLES_USER=examples\n\
+# Make sure you set this to a unique secure random value on production\n\
+EXAMPLES_PASSWORD=examples\n\
+EXAMPLES_PORT=5432\n\
+# database engine specific environment variables\n\
+# change the below if you prefer another database engine\n\
+DATABASE_PORT=5432\n\
+DATABASE_DIALECT=postgresql\n\
+\n\
+# Add the mapped in /app/pythonpath_docker which allows devs to override stuff\n\
+PYTHONPATH=/app/pythonpath:/app/docker/pythonpath_dev\n\
+REDIS_HOST=superset-cache-database\n\
+REDIS_PORT=6379\n\
+\n\
+FLASK_DEBUG=true\n\
+SUPERSET_ENV=development\n\
+SUPERSET_LOAD_EXAMPLES=no\n\
+CYPRESS_CONFIG=false\n\
+SUPERSET_PORT=8088\n\
+MAPBOX_API_KEY=''\n\
+\n\
+# Make sure you set this to a unique secure random value on production\n\
+SUPERSET_SECRET_KEY=TEST_NON_DEV_SECRET\n\
+\n\
+ENABLE_PLAYWRIGHT=false\n\
+PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true\n\
+BUILD_SUPERSET_FRONTEND_IN_DOCKER=true\n\
+SUPERSET_LOG_LEVEL=info" > ./superset-volumes/superset_core_variables.env
+	@echo "Successfully done"
 
 
 dotenv: ## Generates the main project's .env file blueprint
