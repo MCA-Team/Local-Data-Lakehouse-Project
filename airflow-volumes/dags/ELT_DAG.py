@@ -2,18 +2,14 @@ from airflow import DAG
 from airflow.sensors.filesystem import FileSensor
 from airflow.operators.python import PythonOperator
 from airflow.operators.bash import BashOperator
-import logging
 from datetime import datetime
 from utilities import elt_functions
 
 
-
-
-
 # Loading of TOML config file's variables
-config = elt_functions.load_config("dags/utilities/dev-config.toml")
+config = elt_functions.load_config()
 
-# Airflow DAG's default arguments
+# Airflow ELT DAG's default arguments
 def_args = {
     "owner": config["DAG"]["owner"],
     "retries": config["DAG"]["retries_number"],
@@ -34,11 +30,11 @@ with DAG(
 
     
 
-    # Task: Check for the existence of raw JSON files in the local filesystem before extraction and dumping to bronze zone
+    # Task: Checking for the existence of raw JSON files (following the pattern "sales*.json") in the local filesystem before extraction and dumping to bronze zone
     checking_raw_json_files_existence = FileSensor(
             task_id="raw_json_files_availabilty_verification",
-            fs_conn_id="fs_conn",   # Connection pointing to /opt/airflow/local-data/ and have to be configured through Airflow UI > Admin > Connections
-            filepath="sales_*.json",
+            fs_conn_id=config["TASKS"]["fileSensor_connection_id"],   # Connection pointing to /opt/airflow/local-data/ and have to be configured through Airflow webserver UI > Admin > Connections
+            filepath=f"{config["STORAGE"]["source_dir"]}/{config['TASKS']["checking_raw_json_files_existence_file_pattern"]}.json",
             poke_interval=config["TASKS"]["checking_raw_json_files_existence_poke_interval"],
             timeout=config["TASKS"]["checking_raw_json_files_existence_timeout"],
             soft_fail=True  # Skips instead of failing
@@ -51,21 +47,21 @@ with DAG(
         op_kwargs={"toml_config": config}
     )
 
-    # Task: BashOperator task which removes all files from source directory after extract task completed successfully
+    # Task: BashOperator task which removes all files from the local source directory after successfully completing the extract task
     remove_local_files = BashOperator(
-        task_id="remove_local_raw_json_files",
+        task_id="remove_extracted_local_raw_json_files",
         bash_command=f"rm -f {config["STORAGE"]["source_dir"]}/{config['TASKS']["checking_raw_json_files_existence_file_pattern"]}.json",
         trigger_rule = "all_success"
     )
 
-    # Task: Transform (flattening, type checking, filtering) JSON files data from MinIO bronze bucket and dumping them into MinIO Silver bucket
+    # Task: Transform (flattening, type checking, filtering) JSON files data from MinIO Bronze Bucket and dumping them into MinIO Silver Bucket
     transform = PythonOperator(
         task_id="transform_bronze_data_and_dump_into_silver_zone",
         python_callable=elt_functions.transform_bronze_data_to_silver,
         op_kwargs={"toml_config": config}
     )
 
-    # Task: Harness and reprocess MinIO Silver bucket data  through MinIO Gold bucket for BI purposes
+    # Task: Harness and reprocess MinIO Silver bucket data for MinIO Gold Bucket (which is designed for BI purposes)
     load = PythonOperator(
         task_id="data_from_silver_to_gold",
         python_callable=elt_functions.data_from_silver_to_gold,
