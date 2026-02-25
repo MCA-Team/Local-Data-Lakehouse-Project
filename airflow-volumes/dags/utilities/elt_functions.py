@@ -177,9 +177,7 @@ def _apply_silver_transformations_and_write_parquet(toml_config:dict[str, Any],
     Returns:
         None
     """
-    logging.info(f"====================================================== Performing Silver data processing for the file  : \
-                  s3://{toml_config['STORAGE']['bronze_bucket_name']}/{fileToTransform_path} \
-                    ======================================================")
+    logging.info(f"====================================================== Performing Silver data processing for the file  : s3://{toml_config['STORAGE']['bronze_bucket_name']}/{fileToTransform_path} ======================================================")
     fileToTransform:duckdb.DuckDBPyRelation = duckdb_connection.read_json(f"s3://{toml_config['STORAGE']['bronze_bucket_name']}/{fileToTransform_path}")
 
     # Transformations: type casting, columns flatening, data filtering
@@ -218,9 +216,7 @@ def _apply_silver_transformations_and_write_parquet(toml_config:dict[str, Any],
                                 compression=toml_config['STORAGE']['silver_parquet_files_compression_mode'],
                                 overwrite=True
                             )
-    logging.info(f"====================================================== Transformed data written to MinIO Silver Bucket through Parquet format at : \
-                  s3://{toml_config['STORAGE']['silver_bucket_name']}/{silver_partition_path}/{fileToTransform_path.split('/')[-1].replace('.json', '.parquet')} \
-                    ======================================================")
+    logging.info(f"====================================================== Transformed data written to MinIO Silver Bucket through Parquet format at : s3://{toml_config['STORAGE']['silver_bucket_name']}/{silver_partition_path}/{fileToTransform_path.split('/')[-1].replace('.json', '.parquet')} ======================================================")
 
 
 
@@ -242,9 +238,7 @@ def _gold_layer_processing(toml_config:dict[str, Any],
     Returns:
         None
     """
-    logging.info(f"====================================================== Performing Gold data processing for the file  : \
-                  s3://{toml_config['STORAGE']['silver_bucket_name']}/{fileToTransform_path} \
-                    ======================================================")
+    logging.info(f"====================================================== Performing Gold data processing for the file  : s3://{toml_config['STORAGE']['silver_bucket_name']}/{fileToTransform_path} ======================================================")
     fileToTransform:duckdb.DuckDBPyRelation = duckdb_connection.sql( f"""
                                                                         SELECT  transaction_id, \
                                                                                 transaction_date::DATE AS transaction_date, \
@@ -259,7 +253,6 @@ def _gold_layer_processing(toml_config:dict[str, Any],
     transaction_currencies:list[str] = [currency[0].lower() for currency in fileToTransform.select("transaction_currency").distinct().fetchall()]
     conversion_bag:dict[str, float] = _get_currencies_rates(currencies_to_convert=transaction_currencies, 
                                                             base_currency_code=toml_config["TASKS"]["gold_bucket_base_currency"])
-    logging.info(f"Conversion bag is: {conversion_bag}")
 
     # Conversion of all values in "total_amount" column into base currency equivalent through the conversion_bag defined above
     convert_currency:callable[[float, str], float] = lambda amount, currency_code_to_convert : round(amount / conversion_bag[currency_code_to_convert],3)
@@ -267,25 +260,28 @@ def _gold_layer_processing(toml_config:dict[str, Any],
                         .execute("SELECT function_name FROM duckdb_functions() WHERE function_name = 'convert_currency'")\
                         .fetchall()
             )==0:
-        duckdb_connection.create_function("convert_currency", convert_currency, ['DOUBLE', 'VARCHAR'], 'DOUBLE')
+        duckdb_connection.create_function("convert_currency", 
+                                          convert_currency, 
+                                          ['DOUBLE', 'VARCHAR'], 'DOUBLE')
 
-    total_amount_base_currency:duckdb.Expression = duckdb.FunctionExpression( "convert_currency",
+    total_amount_base_currency_expr:duckdb.Expression = duckdb.FunctionExpression( "convert_currency",
                                                                                duckdb.ColumnExpression("total_amount"),
                                                                                duckdb.ColumnExpression("transaction_currency"))
 
     # Appending "total_amount_eur" column (which is the total amount equivalent in the base currency) to the table to transform
     fileToTransform:duckdb.DuckDBPyRelation = fileToTransform\
-                                                        .select(duckdb.StarExpression(), total_amount_base_currency.alias("total_amount_base_currency"))
-    logging.info(f"file to transform final: \n{fileToTransform}")
+                                                        .select(duckdb.StarExpression(), 
+                                                                total_amount_base_currency_expr.alias("total_amount_base_currency"))
+    logging.info(f"file to transform sample: \n{fileToTransform.limit(3)}")
 
 
-    # Each day total revenue: Sum of total_amount aggregate per day
+    # Each day total revenue: Sum of total_amount aggregated per day
     total_revenue:duckdb.DuckDBPyRelation = fileToTransform\
                                                     .aggregate(
                                                         aggr_expr="transaction_date, SUM(total_amount_base_currency)::DECIMAL(10,3) AS total_revenue", 
                                                         group_expr="transaction_date")\
                                                     .set_alias("total_revenue")
-    logging.info(f"total_revenue created")
+    logging.info(f"total_revenue column created")
     
     # Each day total number of orders
     assert fileToTransform.select("transaction_date").distinct().count("transaction_date").shape[0] <= 366, "A year got a maximum of 366 days"
@@ -294,44 +290,50 @@ def _gold_layer_processing(toml_config:dict[str, Any],
                                                         aggr_expr="transaction_date, COUNT(DISTINCT transaction_id) AS order_count", 
                                                         group_expr="transaction_date")\
                                                     .set_alias("order_count")
-    logging.info(f"order_count created")
+    logging.info(f"order_count column created")
     
-    # avg_order_value : 
-    tmp = order_count.join(other_rel=total_revenue, 
-                           condition="transaction_date", 
-                           how="inner")
-    avg_order_value_expr = duckdb.FunctionExpression('divide', duckdb.ColumnExpression("total_revenue"), duckdb.ColumnExpression("order_count"))
+    # avg_order_value : the average amount expensed per day by a customer
+    ## joining order_count and total_revenue tables
+    tmp:duckdb.DuckDBPyRelation = order_count.join(other_rel=total_revenue, 
+                                                    condition="transaction_date", 
+                                                    how="inner")
+    ## computing the avg_order_value
+    avg_order_value_expr:duckdb.Expression = duckdb.FunctionExpression('divide', 
+                                                                       duckdb.ColumnExpression("total_revenue"), 
+                                                                       duckdb.ColumnExpression("order_count"))
 
-    avg_order_value = tmp.select(duckdb.StarExpression(), avg_order_value_expr.cast('DECIMAL(10,3)').alias("avg_order_value"))\
-                         .set_alias("avg_order_value")
+    avg_order_value:duckdb.DuckDBPyRelation = tmp.select(duckdb.StarExpression(), 
+                                                         avg_order_value_expr.cast('DECIMAL(10,3)').alias("avg_order_value"))\
+                                                 .set_alias("avg_order_value")
+    logging.info(f"avg_order_value column created")
 
-    # top_category : most sold item per day
-            # retrieving each distinct category and its total revenue per day
-    all_categories_per_day = fileToTransform\
-                                        .aggregate(aggr_expr="transaction_date, item_product_name, SUM(total_amount_base_currency)::DECIMAL(10,3) AS categories_daily_total_revenue",
-                                                   group_expr="transaction_date, item_product_name")\
-                                        .set_alias("all_categories_per_day")
+    # top_category_product_name : most sold item per day (and its revenue)
+    ## retrieving each distinct category and its total revenue per day
+    total_revenue_per_category_per_day:duckdb.DuckDBPyRelation = fileToTransform\
+                                                                            .aggregate(aggr_expr="transaction_date, item_product_name  AS top_category_product_name, SUM(total_amount_base_currency)::DECIMAL(10,3) AS categories_daily_total_revenue",
+                                                                                        group_expr="transaction_date, top_category_product_name")\
+                                                                            .set_alias("total_revenue_per_category_per_day")
+    ## retrieving the highest value for "categories_daily_total_revenue" colmun per day
+    top_category_total_revenue_per_day:duckdb.DuckDBPyRelation = total_revenue_per_category_per_day\
+                                                                                        .aggregate(aggr_expr="transaction_date, MAX(categories_daily_total_revenue) AS top_category_total_revenue",
+                                                                                                    group_expr="transaction_date")\
+                                                                                        .distinct()\
+                                                                                        .set_alias("top_category_total_revenue_per_day")
 
-            # retrieving the maximum total revenue per day
-    top_category_per_day = all_categories_per_day\
-                                        .aggregate(aggr_expr="transaction_date, MAX(categories_daily_total_revenue) AS top_category_total_revenue",
-                                                   group_expr="transaction_date")\
-                                        .distinct()\
-                                        .set_alias("top_category_per_day")
+    ## joining "total_revenue_per_category_per_day" and "top_category_total_revenue_per_day" to get the top category name and total_revenue per day
+    top_category:duckdb.DuckDBPyRelation = top_category_total_revenue_per_day\
+                                                                .join(other_rel=total_revenue_per_category_per_day, 
+                                                                        condition="top_category_total_revenue_per_day.top_category_total_revenue = total_revenue_per_category_per_day.categories_daily_total_revenue AND \
+                                                                                    top_category_total_revenue_per_day.transaction_date = total_revenue_per_category_per_day.transaction_date", 
+                                                                        how="inner")\
+                                                                .select(*["top_category_total_revenue_per_day.transaction_date", "top_category_product_name", "top_category_total_revenue"])
+    logging.info(f"top_category_product_name column created")
 
-            # joining both to get the top category name and total_revenue per day
-    top_category = top_category_per_day\
-                                .join(other_rel=all_categories_per_day, 
-                                      condition="top_category_per_day.top_category_total_revenue = all_categories_per_day.categories_daily_total_revenue AND \
-                                                 top_category_per_day.transaction_date = all_categories_per_day.transaction_date", 
-                                      how="inner")\
-                                .select(*["top_category_per_day.transaction_date", "item_product_name", "top_category_total_revenue"])
-
-    # Merging all metrics into a single final gold table
-    final_gold_table = top_category\
-                                .join(avg_order_value, condition="transaction_date", how="inner")\
-                                .order("transaction_date")
-    logging.info(f"final_gold_table created: \n {final_gold_table.limit(5)}")
+    # Merging all metric columns into a single final Gold table
+    final_gold_table:duckdb.DuckDBPyRelation = top_category\
+                                                        .join(avg_order_value, condition="transaction_date", how="inner")\
+                                                        .order("transaction_date")
+    logging.info(f"final_gold_table created sample: \n{final_gold_table.limit(5)}")
 
     # Writting of the final data into Gold bucket
     final_gold_table.write_parquet(
@@ -339,9 +341,7 @@ def _gold_layer_processing(toml_config:dict[str, Any],
                                     compression=toml_config['STORAGE']['gold_parquet_files_compression_mode'],
                                     overwrite=True
                                 )
-    logging.info(f"====================================================== Transformed data written to MinIO Gold Bucket through Parquet format at :\
-                  s3://{toml_config['STORAGE']['gold_bucket_name']}/{gold_partition_path}/{fileToTransform_path.split('/')[-1]} \
-                    ======================================================")
+    logging.info(f"====================================================== Transformed data written to MinIO Gold Bucket through Parquet format at : s3://{toml_config['STORAGE']['gold_bucket_name']}/{gold_partition_path}/{fileToTransform_path.split('/')[-1]} ======================================================")
  
 
 
@@ -356,16 +356,19 @@ def _get_currencies_rates(currencies_to_convert:list[str],
     Args:
         currencies_to_convert (list[str]): The list of the currencies which will be converted.
         base_currency_code (str): The code of the currency on which each conversion will be performed.
-        For example if "XOF" is the base, we have to convert other currencies amounts into XOF: base_currency_code="XOF" and currencies_to_convert = ["EUR"], then 1EUR = 656.66 XOF
+        For example if "EUR" is the base_currency_code, we have to convert other currencies amounts into EUR
     Returns:
         str: A dictionary which has as keys, elements in currencies_to_convert, and as value the related converted value to each key based on the base_currency_code.
-        Example: The output is {"EUR":656.66, "XOF":1} for the following inputs: base_currency_code="XOF" and currencies_to_convert = ["EUR", "XOF"]
+        Example: The output is {"XOF": 656.66, "EUR":1} for the following inputs: base_currency_code="EUR" and currencies_to_convert = ["XOF", "EUR"]
     """
     api_url:str = f"https://open.er-api.com/v6/latest/{base_currency_code}"
     exchange_rates:dict[str, float] = requests.get(api_url).json()["rates"]
 
-    return {currency.upper() : exchange_rates[currency.upper()] for currency in currencies_to_convert}
- 
+    conversion_bag = {currency.upper() : exchange_rates[currency.upper()] for currency in currencies_to_convert}
+    logging.info(f"The base currency is : {base_currency_code}")
+    logging.info(f"Conversion bag is: {conversion_bag}")
+    return conversion_bag
+
 
 
 # ===============================================================================================================================================
