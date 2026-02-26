@@ -7,7 +7,7 @@ import duckdb, os, logging, functools, tomllib,requests
 
 ########################################## CONSTANTS/VARIABLES ##########################################
 
-CONFIG_PATH = Path(__file__).parent / "utilities" / "dev-config.toml"
+CONFIG_PATH = Path(__file__).parent / "dev-config.toml"
 
 
 
