@@ -155,18 +155,6 @@ services:
     secrets:
       - airflow_metadata_postgres_password
 
-  # redis:
-  #   image: redis:latest
-  #   expose:
-  #     - 6379
-  #   healthcheck:
-  #     test: ["CMD", "redis-cli", "ping"]
-  #     interval: 10s
-  #     timeout: 30s
-  #     retries: 50
-  #     start_period: 30s
-  #   restart: always
-
   airflow-webserver:
     <<: *airflow-common
     environment:
@@ -335,6 +323,17 @@ services:
       - -c
       - airflow
 
+  # redis:
+  #   image: redis:latest
+  #   expose:
+  #     - 6379
+  #   healthcheck:
+  #     test: ["CMD", "redis-cli", "ping"]
+  #     interval: 10s
+  #     timeout: 30s
+  #     retries: 50
+  #     start_period: 30s
+  #   restart: always
 
   # airflow-worker:
   #   <<: *airflow-common
