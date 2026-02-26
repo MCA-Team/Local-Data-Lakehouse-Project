@@ -4,8 +4,8 @@
 
 [<img src="https://img.shields.io/badge/docker-29.1.5-blue.svg?logo=docker   ">](https://www.docker.com/)
 [<img src="https://img.shields.io/badge/Apache Airflow-2.10.5-successgreen.svg?logo=apacheairflow">](https://airflow.apache.org/docs/apache-airflow/2.10.5/index.html)
-[<img src="https://img.shields.io/badge/DuckDB-1.4.3-yellow.svg?logo=duckdb">](https://duckdb.org/docs/stable/clients/python/overview)
-[<img src="https://img.shields.io/badge/quay.io/minio/aistor/minio-latest-red.svg?logo=minio">](https://quay.io/repository/minio/aistor/minio?tab=tags&tag=latest)       [<img src="https://img.shields.io/badge/Apache Superset-6.0.0-turquoise.svg?logo=apachesuperset">](https://superset.apache.org/docs/intro)
+[<img src="https://img.shields.io/badge/DuckDB-1.4.3-yellow.svg?logo=duckdb">](https://duckdb.org/docs/stable/clients/python/overview)       [<img src="https://img.shields.io/badge/DuckDB--Engine-0.17.0-yellow.svg?logo=duckdb">](https://duckdb.org/docs/stable/clients/python/overview)
+[<img src="https://img.shields.io/badge/quay.io/minio/aistor/minio-RELEASE.2026--02--07T07--43--34Z-red.svg?logo=minio">](https://quay.io/repository/minio/aistor/minio?tab=tags&tag=latest)    [<img src="https://img.shields.io/badge/minio/mc-RELEASE.2025--08--13T08--35--41Z-red.svg?logo=minio">](https://hub.docker.com/r/minio/mc)   [<img src="https://img.shields.io/badge/Apache Superset-6.0.0-turquoise.svg?logo=apachesuperset">](https://superset.apache.org/docs/intro)
 
 ## Table of contents
 [Overiew](#overiew)
@@ -23,7 +23,9 @@
 ---
 
 ## Overiew
-This project is an exploration of data lakehouse concept. It helps us to understand how a data lake and a data warehouse act together in a single one system: **the data lakehouse**. This project implements the latter locally, simply and based on a medallion architecture (bronze - silver - gold layers), with open-source and free tools. 
+This project is an exploration of data lakehouse concept. It helps us to understand how a data lake and a data warehouse act together in a single one system: **the data lakehouse**. This project implements the latter locally, simply and is based on a medallion architecture (bronze - silver - gold layers), with open-source and free tools. It is embedded with a practical use case of ELT workflow which transforms raw sales data (JSON format) into actionable KPIs, while meeting industry standards for managing a Lakehouse Data.
+> **How does it work ?** <br/>
+> This ELT pipeline follows a Medallion Architecture to transform raw sales data into business insights, beginning with the Bronze Zone, where raw JSON files are ingested into MinIO without modification. The data then progresses to the Silver Zone, where it undergoes rigorous processing and is saved to Parquet files. Finally, in the Gold Zone, through SQL aggregations on the Silver Parquet files, high-value business metrics are generated and are stored as final analytical assets.
 
 ## Prerequisites
 To run this project locally, you must have the following tools already installed on your device:
@@ -31,40 +33,59 @@ To run this project locally, you must have the following tools already installed
 - **Git**: for pulling the project's repository
 
 ## Setting up
-After satisfying the above requirements, you can continue with the following steps:
+After satisfying the requirements above, you can continue with the following steps:
 
 **Step 1**: Clone the project's repository
 ```bash
 git clone https://github.com/MCA-Team/Local-Data-Lakehouse-Project.git
 ```
 
-**Step 2**: In your terminal, navigate to the repository's root directory. Then, execute the following command in order to automatically create the containers binded volumes directories:
+**Step 2**: In your terminal, navigate to the project's root  directory. Then, execute the following command in order to automatically create the containers binded volumes directories:
 ```bash
-make create-binded-volumes
+make create-mount-volumes
 ```
 
-**Step 3**: Execute the following command in order to generate a blueprint of the `.env` file:
+**Step 3**: Execute the following command in order to generate docker secrets files:
+```bash
+make create-docker-secrets
+```
+
+**Step 4**: Execute the following command in order to generate a blueprint of specific `.env` files for Airflow, MinIO and Superset. It generates in :
+- **./airflow-volumes/**: `airflow_core_variables.env` and `airflow_metadata_postgres_variables.env` files
+- **./minio-volumes/**: `minio_variables.env` file
+- **./superset-volumes/**: `superset_core_variables.env` and `superset_metadata_postgres_variables.env` files
+```bash
+make airflow-dotenv minio-dotenv superset-dotenv
+```
+> [!WARNING]
+> Every execution overrides the existing files (if they exist)
+
+**Step 5**: Execute the following command in order to generate a blueprint of the global `.env` file. It generates the `./.env` file:
 ```bash
 make dotenv
 ```
-**Step 4**: Include MinIO AIStor license in the directory because without it, MinIO won't run. Go to [MinIO AIStor website](https://www.min.io/pricing) and click **Free > Get started**. You'll receive your free and individual license through e-mail. Download it on your local disk and drop the `minio.license` file into `./minio-volumes/` directory. It should look like this at the end :
+> [!WARNING]
+> Every execution overrides the existing files (if they exist)
+
+**Step 6**: Include a MinIO AIStor license in the `./minio-volumes/` directory because without it, MinIO will not run correctly. Go to [MinIO AIStor website](https://www.min.io/pricing) and click **Free > Get started**. You'll receive your free and individual license through e-mail. Download it on your local disk and drop the `minio.license` file into `./minio-volumes/` directory. It should look like this at the end :
 
 ```bash
 $ tree minio-volumes
-minio-volumes
-├── certs
-├── data
-└── minio.license
-
-3 directories, 1 file
+minio-volumes/
+├── certs/
+├── data/
+├── minio.license 
+└── minio_variables.env
 ```
 
 ## Project directory structure
 Now, after setting up some stuff as shown in the previous section, the project directory's structure will look like this:
 ```bash
-$ tree
+$ tree -L 4
 .
 ├── airflow-volumes/
+│   ├── airflow_core_variables.env
+│   ├── airflow_metadata_postgres_variables.env
 │   ├── config/
 │   ├── dags/
 │   │   ├── ELT_DAG.py
@@ -73,29 +94,45 @@ $ tree
 │   │       ├── elt_functions.py
 │   │       └── __init__.py
 │   ├── logs/
-│   ├── plugins/
-│   └── postgresql-volume/
-├── apache-superset-files/
-│   ├── docker-bootstrap.sh
-│   ├── docker-entrypoint-initdb.d/
-│   │   ├── cypress-init.sh
-│   │   └── examples-init.sh
-│   ├── docker-init.sh
-│   ├── pythonpath_dev/
-│   │   ├── superset_config_local.example
-│   │   └── superset_config.py
-│   └── requirements-local.txt
+│   ├── metadata-postgres-volume/
+│   └── plugins/
 ├── data/
 ├── doc/
 ├── docker-compose.yaml
 ├── dockerfile.airflow
+├── docker-secrets/
+│   ├── airflow/
+│   │   ├── airflow_metadata_postgres_password.secrets
+│   │   ├── airflow_sql_alchemy_connection_string.secrets
+│   │   └── airflow_www_user_password.secrets
+│   ├── minio/
+│   │   └── minio_root_passwd.secrets
+│   └── superset/
+│       ├── superset_admin_password.secrets
+│       └── superset_postgres_password.secrets
 ├── Makefile
 ├── minio-volumes/
 │   ├── certs/
 │   ├── data/
-│   └── minio.license
+│   ├── minio.license
+│   └── minio_variables.env
 ├── README.md
-└── requirements.txt
+├── requirements.txt
+└── superset-volumes/
+    ├── cache-redis-volume/
+    ├── docker-bootstrap.sh
+    ├── docker-entrypoint-initdb.d/
+    │   ├── cypress-init.sh
+    │   └── examples-init.sh
+    ├── docker-init.sh
+    ├── metadata-postgres-volume/
+    ├── pythonpath_dev/
+    │   ├── superset_config_local.example
+    │   └── superset_config.py
+    ├── requirements-local.txt
+    ├── superset_core_variables.env
+    ├── superset_home/
+    └── superset_metadata_postgres_variables.env
 ```
 Let's explore each directory or file and figure out their purposes:
 - **airflow-volumes/**: This directory contains all required volumes to persist Apache Airflow's data. Thoses volumes are binded or mount to ensure data sharing between the Airflow-related containers and local files:
