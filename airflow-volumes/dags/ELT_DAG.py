@@ -50,7 +50,7 @@ with DAG(
     # Task: BashOperator task which removes all files from the local source directory after successfully completing the extract task
     remove_local_files = BashOperator(
         task_id="remove_extracted_local_raw_json_files",
-        bash_command=f"rm -f {config["STORAGE"]["source_dir"]}/{config['TASKS']["checking_raw_json_files_existence_file_pattern"]}.json",
+        bash_command=f"rm -f {config["TASKS"]["source_dir"]}/{config['TASKS']["checking_raw_json_files_existence_file_pattern"]}.json",
         trigger_rule = "all_success"
     )
 
