@@ -38,13 +38,13 @@ def extract_raw_json_files_to_minio_bronze(toml_config:dict[str, Any], ds:str) -
 
     # Now, Scanning all JSON files, following the config["TASKS"]["checking_raw_json_files_existence_file_pattern"]'s patter 
     # in the local source directory and loading them in the MinIO bronze bucket
-    for file in os.listdir(toml_config["STORAGE"]["source_dir"]):
-        if os.path.isfile(os.path.join(toml_config["STORAGE"]["source_dir"], file)) and \
+    for file in os.listdir(toml_config["TASKS"]["source_dir"]):
+        if os.path.isfile(os.path.join(toml_config["TASKS"]["source_dir"], file)) and \
                           file.startswith("sales") and \
                           file.endswith(".json"):
-            logging.info(f"====================================================== Uploading file {toml_config["STORAGE"]["source_dir"]}/{file} to MinIO bronze bucket... ======================================================")
+            logging.info(f"====================================================== Uploading file {toml_config["TASKS"]["source_dir"]}/{file} to MinIO bronze bucket... ======================================================")
             s3_hook.load_file(
-                                filename=f"{toml_config["STORAGE"]["source_dir"]}/{file}",  # Path of the source file to load 
+                                filename=f"{toml_config["TASKS"]["source_dir"]}/{file}",  # Path of the source file to load 
                                 key=f"{partition_path}/{file}",                             # Destination file path
                                 bucket_name=toml_config["STORAGE"]["bronze_bucket_name"],   
                                 replace=True
@@ -412,7 +412,7 @@ def _get_duckdb_s3_config(toml_config:dict[str, Any]) -> dict[str, str]:
                 "s3_secret_access_key": Connection.get_connection_from_secrets(toml_config["STORAGE"]["airflow_aws_connection_id"]).password,
                 "s3_endpoint": Connection.get_connection_from_secrets(toml_config["STORAGE"]["airflow_aws_connection_id"]).extra_dejson["endpoint_url"].replace("http://",""),     # MinIO service name as defined in docker-compose file followed by ":{MiniIO_API_Port}" (e.g., "minio-aistor-server:9008"). Do not use "http://" or "https://", and do not use the MinIO Console port instead.
                 "s3_url_style": toml_config["STORAGE"]["duckdb_s3_url_style_config_param"],     # Use "path" URL style for MinIO and "vhost" for AWS S3
-                "s3_use_ssl": toml_config["STORAGE"]["duckdb_s3_use_ssl_config_param"]       # By default MinIO does not enable SSL; set the "duckdb_s3_use_ssl_config_param" variable to "true" in "dev-config.toml" file if SSL is configured
+                "s3_use_ssl": toml_config["STORAGE"]["duckdb_s3_use_ssl_config_param"]       # By default MinIO does not enable SSL; set the "duckdb_s3_use_ssl_config_param" variable to "true" in "dev-config.toml" file if a proxy is configured for MinIO
             }
 
 
