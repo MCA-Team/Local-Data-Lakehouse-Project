@@ -34,13 +34,13 @@ with DAG(
     checking_raw_json_files_existence = FileSensor(
             task_id="raw_json_files_availabilty_verification",
             fs_conn_id=config["TASKS"]["fileSensor_connection_id"],   # Connection pointing to /opt/airflow/local-data/ and have to be configured through Airflow webserver UI > Admin > Connections
-            filepath=f"{config["STORAGE"]["source_dir"]}/{config['TASKS']["checking_raw_json_files_existence_file_pattern"]}.json",
+            filepath=f"{config['TASKS']["checking_raw_json_files_existence_file_pattern"]}.json",
             poke_interval=config["TASKS"]["checking_raw_json_files_existence_poke_interval"],
             timeout=config["TASKS"]["checking_raw_json_files_existence_timeout"],
             soft_fail=True  # Skips instead of failing
         )
     
-    # Task: Extract JSON files from source directory and dumping them into MinIO bronze bucket
+    # Task: Extract raw JSON files from source directory and dumping them into MinIO bronze bucket
     extract = PythonOperator(
         task_id="extract_raw_json_files_to_minio_bronze",
         python_callable=elt_functions.extract_raw_json_files_to_minio_bronze,
@@ -61,13 +61,13 @@ with DAG(
         op_kwargs={"toml_config": config}
     )
 
-    # Task: Harness and reprocess MinIO Silver bucket data for MinIO Gold Bucket (which is designed for BI purposes)
+    # Task: Harness and reprocess MinIO Silver Bucket data for MinIO Gold Bucket (which is designed for BI purposes)
     load = PythonOperator(
         task_id="data_from_silver_to_gold",
         python_callable=elt_functions.data_from_silver_to_gold,
         op_kwargs={"toml_config": config}
     )
 
-    # DAG's task interdependance
+    # DAG's task interdependency
     checking_raw_json_files_existence >> extract >> [transform, remove_local_files]
     transform >> load
