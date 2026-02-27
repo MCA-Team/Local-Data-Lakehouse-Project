@@ -51,7 +51,7 @@ git clone https://github.com/MCA-Team/Local-Data-Lakehouse-Project.git
 make create-mount-volumes
 ```
 
-**Step 3**: Execute the following command in order to generate docker secrets files:
+**Step 3**: Execute the following command in order to generate docker secrets files. It creates a `./docker-secrets/` directory which contains the `.secrets` files:
 ```bash
 make create-docker-secrets
 ```
@@ -291,23 +291,23 @@ Apache Superset needs a SQL engine to query data from Gold bucket and display it
         ```
         duckdb:///<DB_NAME>.db
         ```
-- The JSON snippet below allows Superset DuckDB's engine to communicate with MinIO's S3 API through an endpoint. Copy and paste the snippet for **Engine Parameters** section (replace `MINIO_ROOT_USER` and `MINIO_ROOT_PASSWD` variables by their respective value):
+- The JSON snippet below allows Superset DuckDB's engine to communicate with MinIO's S3 API through an endpoint. Copy and paste the snippet for **Engine Parameters** section (replace `MINIO_ROOT_USER` (accessible trough `./minio-volumes/minio_variables.env` file) and `MINIO_ROOT_PASSWORD` (`./docker-secrets/minio/minio_root_passwd.secrets` file) variables by their respective value):
 ```json
 {
     "connect_args": {
         "config": {
             "s3_endpoint": "minio-aistor-server:9008",
             "s3_access_key_id": "MINIO_ROOT_USER",
-            "s3_secret_access_key": "MINIO_ROOT_PASSWD",
+            "s3_secret_access_key": "MINIO_ROOT_PASSWORD",
             "s3_use_ssl": "false",
             "s3_url_style": "path"
         }
     }
 }
 ```
-Then, the user have to create a Superset dataset which is a kind of table view in Superset. In our case, it's simple to do it through the **Superset SQL Lab** with the simple DuckDB SQL request below (replace `YEAR`, `MONTH` and `DAY` by the correct values in order to have the right path to the files in the MinIO Gold bucket):
+Then, the user have to create a Superset dataset which is a kind of table view in Superset. In our case, it's simple to do it through the **Superset SQL Lab** with the simple DuckDB SQL request below (replace `MINIO_GOLD_BUCKET_NAME`, `YEAR`, `MONTH` and `DAY` by the correct values in order to have the right path to the files in the MinIO Gold bucket. The `MINIO_GOLD_BUCKET_NAME` variable is accessible through `./minio-volumes/minio_variables.env` file):
 ```sql
-SELECT * FROM read_parquet("s3://gold/year=YEAR/month=MONTH/day=DAY/*.parquet");
+SELECT * FROM read_parquet("s3://MINIO_GOLD_BUCKET_NAME/year=YEAR/month=MONTH/day=DAY/*.parquet");
 ```
 <image src="./doc/superset_dataset.gif" width=1000 center>
 
