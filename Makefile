@@ -42,23 +42,24 @@ shutdown-infra:	## Automatically shuts down the infra removing the containers an
 create-docker-secrets:	## Automatically creates '.secrets' files in the docker-secrets/ directory in order to store docker container's sensitive information
 	@if [ ! -d "./docker-secrets/" ]; then\
 		mkdir ./docker-secrets;\
-	else\
-		for directory_name in "./docker-secrets/airflow/" \
-							  "./docker-secrets/minio/" \
-							  "./docker-secrets/superset/"; \
+	fi
+
+	@for directory_name in "./docker-secrets/airflow/" \
+							"./docker-secrets/minio/" \
+							"./docker-secrets/superset/"; \
 		do \
 			if [ ! -d "$$directory_name" ]; then\
 				mkdir -p $$directory_name;\
-			fi\
-		done \
-	fi
+			fi;\
+		done
+	
 	@touch ./docker-secrets/airflow/airflow_www_user_password.secrets\
 		   ./docker-secrets/airflow/airflow_metadata_postgres_password.secrets \
 		   ./docker-secrets/minio/minio_root_passwd.secrets \
 		   ./docker-secrets/superset/superset_postgres_password.secrets \
 		   ./docker-secrets/superset/superset_admin_password.secrets
-	@echo "postgresql+psycopg2://<AIRFLOW_POSTGRES_USER>:$<AIRFLOW_POSTGRES_PASSWORD>@airflow-postgres/<AIRFLOW_POSTGRES_DB>" >> ./docker-secrets/airflow/airflow_sql_alchemy_connection_string.secrets
-	@echo "Docker secrets successfully created !"
+	@echo "postgresql+psycopg2://AIRFLOW_POSTGRES_USER:AIRFLOW_POSTGRES_PASSWORD@airflow-metadata-db/AIRFLOW_POSTGRES_DB" > ./docker-secrets/airflow/airflow_sql_alchemy_connection_string.secrets
+	@echo "Successfully created !\nCheck the ./docker-secrets/ directory"
 
 airflow-dotenv: ## Generates all required .env files for Apache Airflow containers
 	@echo "Creation of new './airflow-volumes/airflow_core_variables.env' file
