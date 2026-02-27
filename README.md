@@ -223,23 +223,23 @@ After that, Apache Superset is preconfigured with DuckDB-engine to allow request
 
 
 ## Run the project
-The infrastructure is a set of docker containers. That's why the user have to set up the containers stack by executing the following command in the terminal at the root of the repository's directory:
+The infrastructure is a set of docker containers. That's why the user have to set up the containers stack by executing the following command in the terminal at the root of the project's directory:
 ```bash
 make setup-infra
 ```
 
 > [!WARNING]
-> Check the status of all containers. You must have the **'Up'** status for all containers before going on. You can easily check the status through this command:
+> Check the status of all containers. You must have the **'Up'** status for all containers before going on. You can check the status through this command:
 > ```
 > docker container ls
 > ```
 
-Main containers Web UI addresses:
+Here are the main containers Web UI addresses:
 Address     | Container/service
 ----------- | ---------
-`http://localhost:8080` | Apache Airflow Web UI
-`http://localhost:8088` | Apache Superset Web UI
-`http://localhost:9009` | MinIO AIStor Console
+[http://localhost:8080](http://localhost:8080) | Apache Airflow Webserver UI
+[http://localhost:8088](http://localhost:8088) | Apache Superset Webapp UI
+[http://localhost:9009](http://localhost:9009) | MinIO AIStor Console UI
 
 After setting up the insfrastructure, the user must configure some stuffs in order to ensure everything is running well:
 
@@ -247,7 +247,7 @@ After setting up the insfrastructure, the user must configure some stuffs in ord
 
 It is a Airflow's feature that allows the user to store sensitive information like credentials. The configuration can be done through the Airflow Web UI (**Admin > Connection**). The user have to configure 2 Airflow connections:
 
-- **Check `.json` files existence**: To allow Airflow to scan the local directory `./data/` to check the files existence, The user must configure a Airflow connection:
+- **Check `.json` files existence**: To allow Airflow to scan the local directory `./data/` to check the files existence, The user must configure a Airflow connection following the pattern below:
 
     - <u>*Connection id*</u>: must be the same as the value of `fileSensor_connection_id` variable in `./airflow-volumes/dags/utilities/dev-config.toml` file. By default, it is **"fs_conn"**.
     - <u>*Connection Type*</u>: **File (path)**
@@ -259,12 +259,12 @@ It is a Airflow's feature that allows the user to store sensitive information li
 
     - <u>*Connection id*</u>: must be the same as the value of `airflow_aws_connection_id` variable in `./airflow-volumes/dags/utilities/dev-config.toml` file. By default, it is **"minio_conn"**.
     - <u>*Connection Type*</u>: **Amazon Web Services**
-    - <u>*AWS Access Key ID*</u>: the value of `MINIO_ROOT_USER` variable in `./.env` file.
-    - <u>*AWS Secret Access Key*</u>: the value of `MINIO_ROOT_PASSWORD` variable in `./.env` file.
-    - <u>*Extra*</u>: The endpoint URL is a string built like this: *"http://<MINIO_CONTAINER_NAME>:<MINIO_API_PORT>"* (it's litteraly the URL which will be used by Airflow to communicate with MinIO's API). So, copy and paste the following snippet:
+    - <u>*AWS Access Key ID*</u>: the value of `MINIO_ROOT_USER` variable in `./minio-volumes/minio_variables.env` file.
+    - <u>*AWS Secret Access Key*</u>: the password written within the `./docker-secrets/minio/minio_root_passwd.secrets` file.
+    - <u>*Extra*</u>: The endpoint URL is a string built like this: *"http://<MINIO_CONTAINER_NAME>:<MINIO_API_PORT>"* (it's litteraly the URL which will be used by Airflow to communicate with MinIO's API). So, copy and paste the following snippet (based on default MinIO container name and MinIO API port):
     ```json
     {
-      "endpoint_url": "http://minio-server:9008"
+      "endpoint_url": "http://minio-aistor-server:9008"
     }
     ```
 
@@ -274,7 +274,7 @@ It is a Airflow's feature that allows the user to store sensitive information li
 <image src="./doc/minio_conn.gif" width=1000 center>
 
 ### 2. Apache Superset configuration
-Apache Superset needs an engine to query data from Gold bucket and display it on the dashboard. DuckDB in-memory engine is already embedded in our Superset container. So, the user needs to connect Superset to this engine through **"+ > Data > Connect database"** by following the steps shown below:
+Apache Superset needs a SQL engine to query data from Gold bucket and display it on the dashboard. DuckDB in-memory engine is already embedded in our Superset container. So, the user needs to connect Superset to this engine through **"+ > Data > Connect database"** by following the steps shown below:
 
 <image src="./doc/superset_duckdb.gif" width=1000 center>
 
@@ -283,18 +283,18 @@ Apache Superset needs an engine to query data from Gold bucket and display it on
         ```
         duckdb:///:memory:
         ```
-    - if the user wants to persist data through DuckDB Engine (replace <DB_NAME> by the wanted file name, `superset.db` for example)
+    - if the user wants to persist data through DuckDB Engine (replace <DB_NAME> by the db file name, `superset.db` for example)
         ```
         duckdb:///<DB_NAME>.db
         ```
-- The JSON snippet below allows Superset DuckDB's engine to communicate with MinIO's S3 API through an endpoint. Copy and paste the snippet for **Engine Parameters** section:
+- The JSON snippet below allows Superset DuckDB's engine to communicate with MinIO's S3 API through an endpoint. Copy and paste the snippet for **Engine Parameters** section (replace `MINIO_ROOT_USER` and `MINIO_ROOT_PASSWD` variables by their respective value):
 ```json
 {
     "connect_args": {
         "config": {
-            "s3_endpoint": "minio-server:9008",
-            "s3_access_key_id": "<MINIO_ROOT_USER>",
-            "s3_secret_access_key": "<MINIO_ROOT_PASSWD>",
+            "s3_endpoint": "minio-aistor-server:9008",
+            "s3_access_key_id": "MINIO_ROOT_USER",
+            "s3_secret_access_key": "MINIO_ROOT_PASSWD",
             "s3_use_ssl": "false",
             "s3_url_style": "path"
         }
@@ -307,7 +307,7 @@ SELECT * FROM read_parquet("s3://gold/year=YEAR/month=MONTH/day=DAY/*.parquet");
 ```
 <image src="./doc/superset_dataset.gif" width=1000 center>
 
-Now, the user can build a custom BI dashboard based on the created dataset. There is an example of dataset:
+Now, the user can build a custom BI dashboard based on the created dataset. There is an example of Dashboard:
 
 
 
@@ -315,14 +315,18 @@ Now, the user can build a custom BI dashboard based on the created dataset. Ther
 
 
 
-List of useful commands for this project:
+Here is a list of useful commands for this project:
 
 Command     | Description
 ----------- | ---------
-```make dotenv``` | Generates a new blueprint for `./.env` file
-```make create-binded-volumes``` | Automatically creates the containers binded volumes
-```make setup-infra``` | Automatically sets up the infrastructure
-```make shutdown-infra``` | Shutdowns and remove all containers
+```make dotenv``` | Generates the project's .env file blueprint
+```make create-mount-volumes``` | Automatically creates the containers mount volumes
+```make setup-infra``` | Automatically sets up the infra by creating the containers, the volumes and the network(s)
+```make shutdown-infra``` | Automatically shuts down the infra removing the containers and the network(s)
+`make create-docker-secrets` | Automatically creates '.secrets' files in the *docker-secrets/* directory in order to store docker container's sensitive information
+`airflow-dotenv` | Generates all required .env files for Apache Airflow containers
+`minio-dotenv` | Generates all required .env files for MinIO AIStor containers
+`superset-dotenv` | Generates all required .env files for Apache Superset containers
 
 ## Troubleshooting
 
