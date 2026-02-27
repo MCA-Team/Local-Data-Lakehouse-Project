@@ -62,10 +62,10 @@ create-docker-secrets:	## Automatically creates '.secrets' files in the docker-s
 	@echo "Successfully created !\nCheck the ./docker-secrets/ directory"
 
 airflow-dotenv: ## Generates all required .env files for Apache Airflow containers
-	@echo "Creation of new './airflow-volumes/airflow_core_variables.env' file
+	@echo "Creation of new './airflow-volumes/airflow_core_variables.env' file"
 	@echo "# AIRFLOW CORE ENV. VARIABLES\n\
 _AIRFLOW_WWW_USER_USERNAME=airflow" > ./airflow-volumes/airflow_core_variables.env
-	@echo "Creation of new './airflow-volumes/airflow_metadata_postgres_variables.env' file
+	@echo "Creation of new './airflow-volumes/airflow_metadata_postgres_variables.env' file"
 	@echo "# AIRFLOW POSTGRES METADATA DATABASE ENV. VARIABLES\n\
 POSTGRES_USER=airflow\n\
 POSTGRES_DB=airflow" > ./airflow-volumes/airflow_metadata_postgres_variables.env
@@ -98,17 +98,21 @@ EXAMPLES_PASSWORD=examples" > ./superset-volumes/superset_metadata_postgres_vari
 \n\
 # Allowing python to print() in docker\n\
 PYTHONUNBUFFERED=1\n\
+\n\
 # Allowing development environment mode\n\
 DEV_MODE=true\n\
+\n\
 # Superset Admin credentials\n\
-ADMIN_USER=mca-adm29\n\
+ADMIN_USER=superset-admin\n\
 ADMIN_EMAIL=mca.admin@superset.com\n\
 ADMIN_FIRSTNAME=Mattheo\n\
 ADMIN_LASTNAME=Polnareff\n\
+\n\
 # Superset metadata postgres database configurations\n\
 SUPERSET_DATABASE_DB=superset\n\
 SUPERSET_DATABASE_HOST=superset-metadata-db\n\
 DATABASE_USER=superset\n\
+\n\
 # Cypress example DB credentials\n\
 EXAMPLES_DB=examples\n\
 EXAMPLES_HOST=superset-metadata-db\n\
@@ -116,6 +120,7 @@ EXAMPLES_USER=examples\n\
 # Make sure you set this to a unique secure random value on production\n\
 EXAMPLES_PASSWORD=examples\n\
 EXAMPLES_PORT=5432\n\
+\n\
 # database engine specific environment variables\n\
 # change the below if you prefer another database engine\n\
 DATABASE_PORT=5432\n\
