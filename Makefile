@@ -1,11 +1,11 @@
-.PHONY: help create-binded-volumes setup-infra shutdown-infra create-docker-secrets airflow-dotenv minio-dotenv superset-dotenv dotenv
+.PHONY: help create-mount-volumes setup-infra shutdown-infra create-docker-secrets airflow-dotenv minio-dotenv superset-dotenv dotenv
 .DEFAULT_GOAL = help
 
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-24s\033[0m %s\n", $$1, $$2}'
 
-create-binded-volumes: ## Automatically creates the containers binded volumes
+create-mount-volumes: ## Automatically creates the containers mount volumes
 	@for directory_name in "airflow-volumes/dags" \
 							"airflow-volumes/logs" \
 							"airflow-volumes/config" \
@@ -26,7 +26,7 @@ create-binded-volumes: ## Automatically creates the containers binded volumes
 		fi \
 	done
 	@echo "============================================================="
-	@echo "All binded volumes created"
+	@echo "All mount volumes created"
 	
 	
 setup-infra: ## Automatically sets up the infra by creating the containers, the volumes and the network(s)
@@ -39,7 +39,7 @@ setup-infra: ## Automatically sets up the infra by creating the containers, the 
 shutdown-infra:	## Automatically shuts down the infra removing the containers and the network(s)
 	@docker compose down
 
-create-docker-secrets:	## Automatically creates '.secrets' files in order to store docker container's sensitive information
+create-docker-secrets:	## Automatically creates '.secrets' files in the docker-secrets/ directory in order to store docker container's sensitive information
 	@if [ ! -d "./docker-secrets/" ]; then\
 		mkdir ./docker-secrets;\
 	else\
@@ -142,7 +142,7 @@ SUPERSET_LOG_LEVEL=info" > ./superset-volumes/superset_core_variables.env
 	@echo "Successfully done"
 
 
-dotenv: ## Generates the main project's .env file blueprint
+dotenv: ## Generates the project's .env file blueprint
 	@echo "Creation of a new main '.env' file blueprint"
 	@echo "# ==================================== DATA ORCHESTRATION COMPONENTS ENVIRONMENT VARIABLES ====================================\n\
 #Base path to which all the files will be volumed | Default: .\n\
@@ -168,5 +168,5 @@ SUPERSET_IMAGE_TAG=6.0.0\n\
 # Exposed port for Superset's Postgres metadata database\n\
 DATABASE_PORT=5432\n\
 # Exposed port for Superset's Redis cache database\n\
-REDIS_PORT=6379" > t.env
+REDIS_PORT=6379" > .env
 	@echo "Successfully done"
