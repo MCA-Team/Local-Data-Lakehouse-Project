@@ -566,14 +566,3 @@ secrets:
     file: "./docker-secrets/superset/superset_postgres_password.secrets"
   superset_admin_password:
     file: "./docker-secrets/superset/superset_admin_password.secrets"
-
-
-# ************************************** DOCKER VOLUMES **************************************
-volumes:
-  postgresql-volume:
-  superset_home:
-    external: false
-  superset_metadata_db_volume:
-    external: false
-  superset_redis_cache_volume:
-    external: false
