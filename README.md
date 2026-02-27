@@ -20,6 +20,8 @@
 
 [Run the project](#run-the-project)
 
+[Troubleshooting](#troubleshooting)
+
 ---
 
 ## Overiew
@@ -49,8 +51,10 @@ make create-mount-volumes
 ```bash
 make create-docker-secrets
 ```
+> [!NOTE]
+> Fill each `.secrets` file with the correct and specific information.
 
-**Step 4**: Execute the following command in order to generate a blueprint of specific `.env` files for Airflow, MinIO and Superset. It generates in :
+**Step 4**: Execute the following command in order to generate a blueprint of specific environment config files (you can custom it) for Airflow, MinIO and Superset. It generates in :
 - **./airflow-volumes/**: `airflow_core_variables.env` and `airflow_metadata_postgres_variables.env` files
 - **./minio-volumes/**: `minio_variables.env` file
 - **./superset-volumes/**: `superset_core_variables.env` and `superset_metadata_postgres_variables.env` files
@@ -60,7 +64,7 @@ make airflow-dotenv minio-dotenv superset-dotenv
 > [!WARNING]
 > Every execution overrides the existing files (if they exist)
 
-**Step 5**: Execute the following command in order to generate a blueprint of the global `.env` file. It generates the `./.env` file:
+**Step 5**: Execute the following command in order to generate a blueprint of the `./.env` file ((you can custom it)):
 ```bash
 make dotenv
 ```
@@ -177,39 +181,44 @@ Let's explore each directory or file and figure out their purposes:
         - **MINIO_ROOT_USER**: The required Root User's username to log in MinIO Console.
 - **README.md**: The documentation file.
 - **requirements.txt**: This file contains the definition of all necessary Python packages to build the `dockerfile.airflow` custom image.
-- **superset-volumes/**: Apache Supserset needs some configuration before running as a container. This directory holds the necessary files and docker volumes for Superset's containers.
-    - **`docker-bootstrap.sh`**: This Bash script is written for **superset(app)**, **superset-worker** and **superset-worker-beat** containers. The script installs the Python requirements for Superset (defined in `./apache-superset-files/requirements-local.txt` file) and for each container, executes the appropriate command in order to start them correctly.
+- **superset-volumes/**: Apache Supserset needs some configuration before running as a container. This directory holds the necessary configuration files/scripts and docker volumes for Superset's containers.
+    - <u>***cache-redis-volume/***</u>: This directory persists Redis container data for Superset. Redis is the Superset's cache database.
     - <u>***docker-entrypoint-initdb.d/***</u>: The directory contains 2 files:
-        - **`cypress-init.sh`**: This Bash script creates a database for Cypress in the Superset metadata database (the **superset-metadata-pgsql** container). Cypress is a testing framework which will simulate a real user and will test some features. It's disabled by default. Take a peek at [Troubleshooting](#troubleshooting) section for additional infos.
-
-        - **`examples-init.sh`**: This Bash script contains all instructions allowing the downloading and the loading of Superset examples (preset dashboards, charts, dataset,...). It's only executed if the variable `SUPERSET_LOAD_EXAMPLES` is set to **yes** in the `./.env` file.
-    - **`docker-init.sh`**</u>: This Bash script is written for **superset-init** docker service. It executes the Superset examples loading, if `SUPERSET_LOAD_EXAMPLES=yes` in `./.env` file and sets up admin credentials and permissions.
-    - <u>***pythonpath_dev/***</u>: 
-        - **`superset_config.py`**: This file contains the pythonic definition of Superset environment variables. It overrides the defined ones in the `./.env` file and uses default values otherwise.
-    - **`requirements-local.txt`**: This file contains the definition of all necessary Python additional packages for **Superset containers**.
+        - **`cypress-init.sh`**: This Bash script creates a database for Cypress in the Superset metadata database (the **superset-metadata-postgres** container). Cypress is a testing framework which will simulate a real user and will test some features. It is disabled by default. Take a peek at [Troubleshooting](#troubleshooting) section for additional infos.
+        - **`examples-init.sh`**: This Bash script contains all instructions allowing the downloading and the loading of Superset examples (preset dashboards, charts, dataset,...). It is only executed if the variable `SUPERSET_LOAD_EXAMPLES` is set to **yes** (default value is **no**) in the `./superset-volumes/superset_core_variables.env` file.
+    - <u>***metadata-postgres-volume/***</u>: In this directory, many informations about Superset's metadata database are stored. In our case, the database is PostgreSQL.
+    - <u>***pythonpath_dev/***</u>: It contains the following files:
+        - **`superset_config_local.example`**: An example file of local environment variables configuration. An example of `superset_core_variables.env` file as well.
+        - **`superset_config.py`**: This file contains the pythonic definition of Superset environment variables and configuration. It uses environment variables passed by `./superset-volumes/superset_core_variables.env` file to the container.
+    - <u>***superset_home/***</u>: This directory persists some metadata about Superset components (cache and worker processes, extensions, SQL engines,...)
+    - **`docker-bootstrap.sh`**: This Bash script is written for Superset core containers (worker, beat, webapp). The script installs the Python requirements for Superset (defined in the `./superset-volumes/requirements-local.txt` file) and for each container, executes a specific command.
+    - **`docker-init.sh`**</u>: This Bash script is written for **superset-init** docker service. It executes the Superset examples loading, if `SUPERSET_LOAD_EXAMPLES=yes` in `./superset-volumes/superset_core_variables.env` file and sets up the Admin User credentials and permissions.
+    - **`requirements-local.txt`**: This file contains the definition of all required Python additional packages for **Superset core containers**.
+    - **`superset_core_variables.env`**: This file contains a set of required variables for Superset core containers. Each variable role is explained within the file.
+    - **`superset_metadata_postgres_variables.env`**: This file contains a set of variables for Superset metadata database credentials.
 
 ## Local lakehouse architecture explained
 The architecture is pretty simple. The core is composed by 3 parts :
-- **The data orchestrator**: represented by Apache Airflow's ecosystem. It controls the tasks flows and triggers specific tasks accordingly to specific events.
-- **The storage**: which represents the Medallion architecture. MinIO which is a S3-compatible Object Storage is fitted for this role. With 3 buckets, each associated to Bronze - Silver - Gold concepts, it fulfills storage requirements for this use case.
-- **The BI**: Apache Superset is a modern, open-source and efficient BI tool which totally satisfies BI requirements, providing rich charts and visualization assets.
+- **The data orchestration**: represented by Apache Airflow's ecosystem. It controls the tasks flows and triggers specific tasks accordingly to specific events.
+- **The data storage**: which models the Medallion architecture. MinIO which is a S3-compatible Object Storage is fitted for this role. With 3 buckets, each associated to Bronze - Silver - Gold concepts, it fulfills data storage requirements for this use case.
+- **The BI (Business Intelligence)**: Apache Superset is a modern, open-source and efficient BI tool which totally satisfies BI requirements, providing rich charts and visualization assets.
 
 > How do these 3 parts interact ?
 
 <image src="./doc/arch.png" width=1000 center>
 
-The 3 elements above interact in an ELT process pattern. Apache Airflow configures some tasks. The first Airflow task scans `./data/` directory in order to find `.json` files following the `sales*.json` name pattern. If no file is found, The process exits. Otherwise, Airflow starts its second task which picks found files from `./data/` directory and dumps them into MinIO Bronze bucket. After this operation, files are automatically removed from `./data/` directory. Then, the Bronze bucket's files are selected, processed by DuckDB in-memory engine (installed in Airflow-sceduler container through `./requirements.txt` file) and saved as `.parquet` files into MinIO Silver bucket. Finally, for BI purposes, the last Airflow's task uses the processed Silver files, and apply processings like aggregations in order to keep only one line per date. Those new processed files are saved into MinIO Gold bucket as `.parquet` files.
+The 3 elements above interact in an ELT process pattern. Apache Airflow configures some tasks. The first Airflow task scans `./data/` directory in order to find `.json` files following the `sales*.json` name pattern. If no file is found, The process exits. Otherwise, Airflow starts its second task which picks found files from `./data/` directory and dumps them into MinIO Bronze bucket. After this operation, files are automatically removed from `./data/` directory. Then, the Bronze bucket's files are selected, processed by DuckDB in-memory engine (installed in Airflow-scheduler container through `./requirements.txt` file) and saved as `.parquet` files into MinIO Silver bucket. Finally, for BI purposes, the last Airflow's task uses the processed Silver files, and apply refined processings like aggregations in order to keep only one line per date. Those new processed files are saved into MinIO Gold bucket as `.parquet` files.
 
 After that, Apache Superset is preconfigured with DuckDB-engine to allow requests between Superset itself and MinIO Gold bucket files. Then, through SQL queries and drag-and-drop components, a neat and informative dashboard can spring up. That's the global data flow of this local data lakehouse system.
 
 > [!NOTE]
-> After the data extraction task successfully wrote the files in Bronze bucket, another task must remove the files from `./data/` directory for local memory purpopes and because Bronze bucket acts like a data lake.
+> After the data extraction task successfully wrote the files in Bronze bucket, another task must remove the files from `./data/` directory for local memory purpopes and because Bronze bucket acts like a data lake and the only source of truth in the architecture.
 
 > [!NOTE]
-> For **data idempotency and partioning**, the files are stored in MinIO following a temporal file structure for each bucket : `/year=2024/month=01/day=15/sales_20240115.parquet` for example. This allows the user to replay a specific day without impacting the rest.
+> For **data idempotency and partioning** purposes, the files are stored in MinIO following a temporal file structure for each bucket : `/year=2024/month=01/day=15/sales_20240115.parquet` for example. This allows the user to replay a specific day without impacting the rest.
 
 > [!NOTE]
-> This infrastructure is designed as a Modern Data Stack (MDS)
+> This infrastructure is designed following a Modern Data Stack (MDS) logic.
 
 
 
