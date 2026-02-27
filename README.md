@@ -22,6 +22,10 @@
 
 [Troubleshooting](#troubleshooting)
 
+[What next ?](#what-next-)
+
+[Resources](#resources)
+
 ---
 
 ## Overiew
@@ -329,6 +333,30 @@ Command     | Description
 `superset-dotenv` | Generates all required .env files for Apache Superset containers
 
 ## Troubleshooting
+> The project has been developed through a Linux/Unix platform. Please if you are Windows user, the easiest way to harness it is through a Linux virtual machine. Although you can encounter some errors.
+
+> Avoid using "`postgres`" as value for `POSTGRES_USER` variable in `./airflow-volumes/airflow_metadata_postgres_variables.env` or `superset-volumes/superset_metadata_postgres_variables.env` file. It'll disturb the authentication to your metadata database container.
+
+> If you encounter some writing permissions issues for airflow-volumes/ directories especially airflow-volumes/dags/ one, make sure the value of `AIRFLOW_UID` (accessible through `./.env` file) variable is the output of the following command:
+```shell
+id -u
+```
 
 > [!WARNING]
 > Cypress is being phased out in favor of Playwright. Use Playwright for all new tests.
+
+## What next ?
+This first iteration was oriented development. A more optimized and production-focused iteration is in preparation.
+
+## Resources
+Apache Superset official documentation: [click here](https://superset.apache.org/user-docs/)
+
+Apache Superset GitHub repository: [click here](https://github.com/apache/superset)
+
+Apache Airflow 2.10.5 official documentation: [click here](https://airflow.apache.org/docs/apache-airflow/2.10.5/index.html)
+
+MinIO AIStor official documentation: [click here](https://docs.min.io/enterprise/aistor-object-store/)
+
+DuckDB official documentation: [click here](https://duckdb.org/docs/stable/)
+
+Docker docs: [click here](https://docs.docker.com/manuals/)
