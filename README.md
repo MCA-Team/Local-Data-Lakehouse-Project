@@ -35,8 +35,9 @@ This project is an exploration of data lakehouse concept. It helps us to underst
 
 ## Prerequisites
 To run this project locally, you must have the following tools already installed on your device:
-- **Docker**: which will be the containerization engine (you can use Podman as well)
-- **Git**: for pulling the project's repository
+- **Docker**: which will be the containerization engine (you can use Podman as well).
+- **Git**: for pulling the project's repository.
+- **make**: For executing preset commands defined in the Makefile. It is a native command on Linux/Unix systems but can be installed (especially for Windows Users).
 
 ## Setting up
 After satisfying the requirements above, you can continue with the following steps:
