@@ -314,9 +314,10 @@ SELECT * FROM read_parquet("s3://MINIO_GOLD_BUCKET_NAME/year=YEAR/month=MONTH/da
 
 Now, the user can build a custom BI dashboard based on the created dataset. There is an example of Dashboard:
 
+<image src="./doc/superset-demo.gif" width=1000 center>
 
-
-
+> [!NOTE]
+> This infrastructure is designed for any ELT data pipeline. The use case implemented in the **"./airflow-volumes/dags/"** directory is an example. The user can define as many DAGs as wanted.
 
 
 
