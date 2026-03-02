@@ -59,6 +59,9 @@ make create-docker-secrets
 > [!NOTE]
 > Fill each `.secrets` file with the correct and specific information.
 
+> [!WARNING]
+> The `./docker-secrets/airflow/airflow_sql_alchemy_connection_string.secrets` file is overriden (if already exists) for each execution of the command above.
+
 **Step 4**: Execute the following command in order to generate a blueprint of specific environment config files (you can custom it) for Airflow, MinIO and Superset. It generates in :
 - **./airflow-volumes/**: `airflow_core_variables.env` and `airflow_metadata_postgres_variables.env` files
 - **./minio-volumes/**: `minio_variables.env` file
@@ -66,6 +69,9 @@ make create-docker-secrets
 ```bash
 make airflow-dotenv minio-dotenv superset-dotenv
 ```
+
+> [!NOTE]
+> The files created by the command above are blueprints coming up with default values. The user can customize them. 
 > [!WARNING]
 > Every execution overrides the existing files (if they exist)
 
@@ -215,6 +221,13 @@ The architecture is pretty simple. The core is composed by 3 parts :
 The 3 elements above interact in an ELT process pattern. Apache Airflow configures some tasks. The first Airflow task scans `./data/` directory in order to find `.json` files following the `sales*.json` name pattern. If no file is found, The process exits. Otherwise, Airflow starts its second task which picks found files from `./data/` directory and dumps them into MinIO Bronze bucket. After this operation, files are automatically removed from `./data/` directory. Then, the Bronze bucket's files are selected, processed by DuckDB in-memory engine (installed in Airflow-scheduler container through `./requirements.txt` file) and saved as `.parquet` files into MinIO Silver bucket. Finally, for BI purposes, the last Airflow's task uses the processed Silver files, and apply refined processings like aggregations in order to keep only one line per date. Those new processed files are saved into MinIO Gold bucket as `.parquet` files.
 
 After that, Apache Superset is preconfigured with DuckDB-engine to allow requests between Superset itself and MinIO Gold bucket files. Then, through SQL queries and drag-and-drop components, a neat and informative dashboard can spring up. That's the global data flow of this local data lakehouse system.
+
+> The `./airflow-volumes/dags/ELT_DAG.py` example of use case.
+
+The embedded use case in this architecture showcases a ELT process where `.json` files are extracted, processed and exposed as meaningful KPIs. The `.json` files follow the filename pattern `sales*.json`. It can be modified through `checking_raw_json_files_existence_file_pattern` variable in `./airflow-volumes/dags/utilities/dev-config.toml` file. To generate these files, a mini python program runs and creates random data. The program is available [here](https://colab.research.google.com/drive/1n1aXg24LSPO1CSPXW6I4P2jn1yUiXgxQ?usp=sharing).
+The structure of a `sales*.json` file looks like this:
+
+<image src="./doc/sales-pattern.png" width=1000 center>
 
 > [!NOTE]
 > After the data extraction task successfully wrote the files in Bronze bucket, another task must remove the files from `./data/` directory for local memory purpopes and because Bronze bucket acts like a data lake and the only source of truth in the architecture.
