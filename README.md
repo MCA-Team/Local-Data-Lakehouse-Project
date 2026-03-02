@@ -72,6 +72,7 @@ make airflow-dotenv minio-dotenv superset-dotenv
 
 > [!NOTE]
 > The files created by the command above are blueprints coming up with default values. The user can customize them. 
+
 > [!WARNING]
 > Every execution overrides the existing files (if they exist)
 
