@@ -431,7 +431,29 @@ services:
       "
     restart: on-failure
 
+  trino-engine:
+    image: trinodb/trino:479
+    container_name: trino-engine
+    hostname: local-lakehouse-trino-engine
+    restart: always
+    user: "root"
+    ports:
+      - "8081:8080"
+    environment:
+      - TRINO_SINGLE_NODE=true
+      - CATALOG_MANAGEMENT=dynamic
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail http://localhost:8080/v1/info"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 5s
+    volumes:
+      - ./trino-volumes/catalog:/etc/trino/catalog/
+      - trino-temp-metastore:/tmp/trino-hive-metastore
+      # - ./trino-volumes/config.properties:/etc/trino/config.properties
 
+      
 # ================================= BI WITH APACHE SUPERSET =================================
 
   superset-cache-database:
@@ -566,3 +588,6 @@ secrets:
     file: "./docker-secrets/superset/superset_postgres_password.secrets"
   superset_admin_password:
     file: "./docker-secrets/superset/superset_admin_password.secrets"
+
+volumes:
+  trino-temp-metastore:
