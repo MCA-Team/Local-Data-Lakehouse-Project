@@ -450,7 +450,6 @@ services:
       start_period: 5s
     volumes:
       - ./trino-volumes/catalog:/etc/trino/catalog/
-      - trino-temp-metastore:/tmp/trino-hive-metastore
       # - ./trino-volumes/config.properties:/etc/trino/config.properties
 
       
@@ -588,6 +587,3 @@ secrets:
     file: "./docker-secrets/superset/superset_postgres_password.secrets"
   superset_admin_password:
     file: "./docker-secrets/superset/superset_admin_password.secrets"
-
-volumes:
-  trino-temp-metastore:
