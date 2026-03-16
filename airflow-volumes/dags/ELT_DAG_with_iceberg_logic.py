@@ -45,10 +45,10 @@ with DAG(
     
     # Task: Extract raw JSON files from source directory and dumping them into MinIO bronze bucket
     extract = PythonOperator(
-        task_id="extract_raw_json_files_to_minio_bronze",
-        python_callable=elt_functions_with_iceberg.extract_raw_json_files_to_minio_bronze,
-        op_kwargs={"toml_config": config}
-    )
+                task_id="extract_raw_json_files_to_minio_bronze",
+                python_callable=elt_functions_with_iceberg.extract_raw_json_files_to_minio_bronze,
+                op_kwargs={"toml_config": config}
+            )
 
     # Task BashOperator: task which removes all files from the local source directory after successfully completing the extract task
     remove_local_files = BashOperator(
@@ -64,7 +64,13 @@ with DAG(
         trigger_rule = "all_success"
     )
 
+    bronze_iceberg = PythonOperator(
+                        task_id="load_raw_parquet_files_to_bronze_iceberg_table",
+                        python_callable=elt_functions_with_iceberg.load_raw_parquet_files_to_bronze_iceberg_table,
+                        op_kwargs={"toml_config": config}
+                    )
+
     # DAG's task interdependency
-    checking_raw_json_files_existence >> extract >> [transform, remove_local_files]
+    checking_raw_json_files_existence >> extract >> bronze_iceberg >> [transform, remove_local_files]
 
     # transform >> load
