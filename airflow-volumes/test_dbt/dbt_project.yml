@@ -1,0 +1,42 @@
+
+# Name your project! Project names should contain only lowercase characters
+# and underscores. A good package name should reflect your organization's
+# name or the intended use of these models
+name: 'test_dbt'
+version: '1.0.0'
+
+# This setting configures which "profile" dbt uses for this project.
+profile: 'test_dbt'
+
+# These configurations specify where dbt should look for different types of files.
+# The `model-paths` config, for example, states that models in this project can be
+# found in the "models/" directory. You probably won't need to change these!
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+clean-targets:         # directories to be removed by `dbt clean`
+  - "target"
+  - "dbt_packages"
+
+vars:  # Variables are a great way to avoid hardcoding values in your models. You can
+       # set them here, and then reference them in your models with {{ var('my_variable') }}
+  dbt_date: 'Europe/Paris'
+
+flags:
+  require_certificate_validation: 'False'  # This is required to connect to Trino with self-signed certificates. Set it to 'True' if you have valid certificates in place.
+
+# Configuring models
+# Full documentation: https://docs.getdbt.com/docs/configuring-models
+
+# In this example config, we tell dbt to build all models in the example/
+# directory as views. These settings can be overridden in the individual model
+# files using the `{{ config(...) }}` macro.
+models:
+  test_dbt:
+    # Config indicated by + and applies to all files under models/example/
+    silver:
+      +materialized: table

@@ -1,0 +1,12 @@
+test_dbt:
+  target: dev
+  outputs:
+    dev:
+      type: trino
+      method: none
+      user: trino
+      host: trino-engine 
+      port: 8080
+      database: silver # Default catalog. We can use other catalogs in our models by specifying them in the 'database' parameter of the source configuration in sources.yml file
+      schema: sales
+      threads: 4

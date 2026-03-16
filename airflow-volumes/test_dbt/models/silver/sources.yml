@@ -1,0 +1,8 @@
+version: 2
+
+sources:
+  - name: bronze_zone
+    database: silver  # <--- On force le catalogue ici (Trino database = Catalog)
+    schema: sales
+    tables:
+      - name: bronze_table

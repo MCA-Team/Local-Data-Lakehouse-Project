@@ -1,0 +1,19 @@
+models:
+  - name: gold_table
+    description: "This is the gold table created from the silver table. It contains data from the silver table but with additional transformations and aggregations."
+    columns:
+      - name: transaction_date
+        description: "The date and time when the transaction occurred."
+        data_test:
+          - not_null
+          - unique
+      - name: total_revenue
+        description: "The total revenue generated from the transaction, calculated as the sum of (item_quantity * item_price) for all items in the transaction."
+      - name: order_count
+        description: "The total number of items in the transaction, calculated as the sum of distinct transaction_ids."
+      - name: avg_order_value
+        description: "The average order value for the transaction, calculated as total_revenue divided by order_count."
+      - name: item_quantity
+        description: "The quantity of the product that was purchased in the transaction."
+      - name: ingestion_date
+        description: "The date when the transaction data was ingested into the gold table."
