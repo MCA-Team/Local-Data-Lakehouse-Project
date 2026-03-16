@@ -95,7 +95,7 @@ def extract_raw_json_files_to_minio_bronze(toml_config:dict[str, Any], ds:str) -
                                                                     
                 final_file.write_parquet(
                                         f"s3://{toml_config['STORAGE']['bronze_bucket_name']}/raw_parquets/{partition_path}/{file.split('/')[-1].replace('.json', '.parquet')}", 
-                                        compression=toml_config['STORAGE']['silver_parquet_files_compression_mode'],
+                                        compression=toml_config['STORAGE']['parquet_files_compression_mode'],
                                         overwrite=True
                                     )
                 logging.info(final_file.shape)
@@ -103,7 +103,14 @@ def extract_raw_json_files_to_minio_bronze(toml_config:dict[str, Any], ds:str) -
 
 
 def setup_environment(access_key: str, secret_key: str, region: str) -> None:
-    """Configure AWS environment variables for authentication."""
+    """
+    Configure AWS environment variables for authentication.
+    Args:        
+        access_key (str): The AWS access key ID.
+        secret_key (str): The AWS secret access key.
+        region (str): The AWS region name.
+    Returns:        None
+    """
     os.environ["AWS_ACCESS_KEY_ID"] = access_key
     os.environ["AWS_SECRET_ACCESS_KEY"] = secret_key
     os.environ["AWS_REGION"] = region
@@ -118,67 +125,73 @@ def load_raw_parquet_files_to_bronze_iceberg_table(toml_config:dict[str, Any], d
     Returns:
         None
     """
-    partition_path:str = _get_partition_path_blueprint(ds)
+
     # Example: Bronze partition path is: year=2026/month=02/day=23
+    partition_path:str = _get_partition_path_blueprint(ds)
     logging.info(f"Bronze partition path is: {partition_path}")
-
-
-    f"s3://{toml_config['STORAGE']['bronze_bucket_name']}/raw_parquets/{partition_path}/"
 
     s3_hook:S3Hook = S3Hook(aws_conn_id=toml_config["STORAGE"]["airflow_aws_connection_id"])
     raw_parquet_files_in_bronze_partition_path:list[str] = s3_hook.list_keys(bucket_name=toml_config["STORAGE"]["bronze_bucket_name"],
-                                                                 prefix=f"raw_parquets/{partition_path}")
-    logging.info(f"Existing parquetfiles in MinIO Bronze Bucket : {raw_parquet_files_in_bronze_partition_path}")
+                                                                             prefix=f"raw_parquets/{partition_path}")
+    logging.info(f"Existing parquet files in MinIO Bronze Bucket : {raw_parquet_files_in_bronze_partition_path}")
 
-    setup_environment("airflow", "miniopasswd", "local")  # Set up environment variables for MinIO authentication
+    # This configuration is necessary to allow the pyiceberg engine to interact with MinIO S3 API and load the raw parquet files from MinIO to the Iceberg Bronze table
+    setup_environment(
+                        access_key=Connection.get_connection_from_secrets(toml_config["STORAGE"]["airflow_aws_connection_id"]).login,
+                        secret_key=Connection.get_connection_from_secrets(toml_config["STORAGE"]["airflow_aws_connection_id"]).password,
+                        region="local"
+                    )
 
+    # Load the Pyiceberg catalog with a configuration allowing it to interact with MinIO S3 API
     catalog = load_catalog(
                     "minio_warehouse",
                     **{
-                        "uri": "http://minio-aistor-server:9008/_iceberg",
-                        "warehouse": "minio-warehouse",
+                        "uri": f"{Connection.get_connection_from_secrets(toml_config["STORAGE"]["airflow_aws_connection_id"]).extra_dejson["endpoint_url"]}/_iceberg",
+                        "warehouse": toml_config["STORAGE"]["minio_warehouse_name"],
                         "rest.sigv4-enabled": "true",
                         "rest.signing-name": "s3tables",
-                        "rest.signing-region": "local",
-                        "s3.access-key-id": "airflow",
-                        "s3.secret-access-key": "miniopasswd",
+                        "rest.signing-region": os.getenv("AWS_REGION"),
+                        "s3.access-key-id": os.getenv("AWS_ACCESS_KEY_ID"),
+                        "s3.secret-access-key": os.getenv("AWS_SECRET_ACCESS_KEY"),
                         "s3.path-style-access": "true",
-                        "s3.endpoint": "http://minio-aistor-server:9008"
+                        "s3.endpoint": Connection.get_connection_from_secrets(toml_config["STORAGE"]["airflow_aws_connection_id"]).extra_dejson["endpoint_url"]
                     }
             )
 
-    # Configurer le filesystem explicitement pour MinIO
+    # Configure a PyArrow filesystem to allow interactions between PyArrow and MinIO S3 API for the loading of raw parquet files from MinIO to the Iceberg Bronze table
     minio_fs = fs.S3FileSystem(
-        endpoint_override="http://minio-aistor-server:9008",
-        access_key="airflow",
-        secret_key="miniopasswd",
-        region="local",
+        endpoint_override=Connection.get_connection_from_secrets(toml_config["STORAGE"]["airflow_aws_connection_id"]).extra_dejson["endpoint_url"],
+        access_key=os.getenv("AWS_ACCESS_KEY_ID"),
+        secret_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+        region=os.getenv("AWS_REGION"),
         scheme="http"
     )
 
+    # Partition columns to remove from the raw parquet file schema before loading to Iceberg, as they will be added as partition columns in the Iceberg table definition
     cols_to_remove = ['year', 'month', 'day']
-    table_identifier = ("sales_schema", "bronze_table")
+
+    # Loading of Bronze Iceberg table's catalog as a Pyiceberg catalog object
+    table_identifier = (toml_config["STORAGE"]["minio_warehouse_namespace"], 
+                        toml_config["STORAGE"]["minio_warehouse_bronze_table_name"])
     table = catalog.load_table(table_identifier)
     
-
-    day_filter = EqualTo("transaction_date", f"{ds}T00:00:00") 
-    # Overwrite the partition ensuring idempotency and consistency of data in the Iceberg Bronze table, then append the parquet file to the table. The overwrite action will only affect the partition corresponding to the parquet file's data (e.g., if the parquet file contains transactions dated "2022-03-22", only the partition "transaction_date=2022-03-22" will be overwritten in the Iceberg table, and not the entire table)
-
+    # Filter defintion to ensure partition overwriting will only affect the partition corresponding to the Iceberg Bronze table
+    bronze_iceberg_table_partition_overwriting_filter = EqualTo(toml_config["STORAGE"]["minio_warehouse_bronze_table_partition_column"], ds) 
     
-    tables = []
+    pyiceberg_tables_to_write = []
 
     for bronze_parquet_file in raw_parquet_files_in_bronze_partition_path:
         arrow_table = pq.read_table(f"{toml_config['STORAGE']['bronze_bucket_name']}/{bronze_parquet_file}", filesystem=minio_fs)
         arrow_table = arrow_table.drop(cols_to_remove)  # Drop partition columns from the table schema before loading to Iceberg, as they will be added as partition columns in the Iceberg table definition
+        pyiceberg_tables_to_write.append(arrow_table)
         logging.info(f"Parquet file loaded: {bronze_parquet_file}")
-        logging.info(f"Parquet file schema: {arrow_table.schema}")
-        tables.append(arrow_table)
-        logging.info(f"Parquet file {bronze_parquet_file} loaded to Iceberg Bronze table")
     
-    # Overwrite the partition ensuring idempotency and consistency of data in the Iceberg Bronze table, then append the parquet file to the table. The overwrite action will only affect the partition corresponding to the parquet file's data (e.g., if the parquet file contains transactions dated "2022-03-22", only the partition "transaction_date=2022-03-22" will be overwritten in the Iceberg table, and not the entire table)
-    final_table = pyarrow.concat_tables(tables)
-    table.overwrite(final_table, overwrite_filter=day_filter)
-    logging.info("All raw parquet files from MinIO Bronze Bucket were loaded to the Iceberg Bronze table")
+    # Overwrite the partition ensuring idempotency and consistency of data in the Iceberg Bronze table, then append the parquet file to the table. 
+    # The overwrite action will only affect the partition corresponding to the parquet file's data 
+    # (e.g., if the parquet file contains transactions dated "2022-03-22", only the partition "transaction_date=2022-03-22" will be overwritten in the Iceberg table, and not the entire table)
+    final_table = pyarrow.concat_tables(pyiceberg_tables_to_write)
+    table.overwrite(final_table, overwrite_filter=bronze_iceberg_table_partition_overwriting_filter)
+    logging.info("All raw parquet files from MinIO Bronze Bucket were loaded to the Iceberg Bronze table !")
 
 # ===============================================================================================================================================
 
@@ -220,8 +233,8 @@ def _get_duckdb_s3_config(toml_config:dict[str, Any]) -> dict[str, str]:
                 "s3_access_key_id": Connection.get_connection_from_secrets(toml_config["STORAGE"]["airflow_aws_connection_id"]).login,
                 "s3_secret_access_key": Connection.get_connection_from_secrets(toml_config["STORAGE"]["airflow_aws_connection_id"]).password,
                 "s3_endpoint": Connection.get_connection_from_secrets(toml_config["STORAGE"]["airflow_aws_connection_id"]).extra_dejson["endpoint_url"].replace("http://",""),     # MinIO service name as defined in docker-compose file followed by ":{MiniIO_API_Port}" (e.g., "minio-aistor-server:9008"). Do not use "http://" or "https://", and do not use the MinIO Console port instead.
-                "s3_url_style": toml_config["STORAGE"]["duckdb_s3_url_style_config_param"],     # Use "path" URL style for MinIO and "vhost" for AWS S3
-                "s3_use_ssl": toml_config["STORAGE"]["duckdb_s3_use_ssl_config_param"]       # By default MinIO does not enable SSL; set the "duckdb_s3_use_ssl_config_param" variable to "true" in "dev-config.toml" file if a proxy is configured for MinIO
+                "s3_url_style": toml_config["STORAGE"]["s3_url_style_config_param"],     # Use "path" URL style for MinIO and "vhost" for AWS S3
+                "s3_use_ssl": toml_config["STORAGE"]["s3_use_ssl_config_param"]       # By default MinIO does not enable SSL; set the "duckdb_s3_use_ssl_config_param" variable to "true" in "dev-config.toml" file if a proxy is configured for MinIO
             }
 
 
