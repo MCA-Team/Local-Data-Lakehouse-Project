@@ -416,7 +416,7 @@ services:
     
 
   minio-autocreate-buckets:
-    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    image: quay.io/minio/aistor/mc:RELEASE.2026-02-03T00-12-26Z
     container_name: minio-autocreate-buckets
     <<: *minio-common-env
     depends_on:
@@ -427,8 +427,8 @@ services:
 
       mc alias set local-lakehouse http://minio-aistor-server:${MINIO_API_PORT} $${MINIO_ROOT_USER} $$(cat $$MINIO_ROOT_PASSWORD_FILE);
       mc mb --ignore-existing local-lakehouse/$${MINIO_BRONZE_BUCKET_NAME};
-      mc mb --ignore-existing local-lakehouse/$${MINIO_SILVER_BUCKET_NAME};
-      mc mb --ignore-existing local-lakehouse/$${MINIO_GOLD_BUCKET_NAME};
+      mc table warehouse create --ignore-existing local-lakehouse minio-warehouse;
+      mc table namespace create --ignore-existing local-lakehouse minio-warehouse sales_schema;
       exit 0;
       "
     restart: on-failure
