@@ -10,7 +10,7 @@
 WITH source AS (
     SELECT
         *
-    FROM {{ source('silver_zone', 'silver_table')}}
+    FROM {{ ref('silver_table') }}
 ), tableToTransform AS (
     SELECT 
          transaction_id,
