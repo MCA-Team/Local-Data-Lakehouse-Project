@@ -7,6 +7,6 @@ test_dbt:
       user: trino
       host: trino-engine 
       port: 8080
-      database: minio-warehouse
+      database: minio_warehouse
       schema: sales_schema
       threads: 4

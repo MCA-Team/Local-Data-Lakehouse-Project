@@ -2,7 +2,7 @@ version: 2
 
 sources:
   - name: bronze_source
-    database: minio-warehouse
+    database: minio_warehouse
     schema: sales_schema
     tables:
       - name: bronze_table
