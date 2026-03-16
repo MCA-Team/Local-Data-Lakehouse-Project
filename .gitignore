@@ -2,6 +2,7 @@
 airflow-volumes/config/*
 airflow-volumes/logs/*
 airflow-volumes/plugins/*
+airflow-volumes/metadata-postgres-volume
 __pycache__/
 *.pyc
 *.pyo
