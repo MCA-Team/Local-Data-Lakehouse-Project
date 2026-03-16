@@ -10,7 +10,7 @@
 WITH source AS (
     SELECT
         *
-    FROM {{ source('bronze_zone', 'bronze_table')}}
+    FROM {{ source('bronze_source', 'bronze_table')}}
 ), final_data AS (
     SELECT 
          transaction_id,

@@ -1,8 +1,8 @@
 version: 2
 
 sources:
-  - name: bronze_zone
-    database: silver  # <--- On force le catalogue ici (Trino database = Catalog)
-    schema: sales
+  - name: bronze_source
+    database: minio-warehouse
+    schema: sales_schema
     tables:
       - name: bronze_table

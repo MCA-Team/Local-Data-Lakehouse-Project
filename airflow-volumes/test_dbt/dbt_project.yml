@@ -38,5 +38,5 @@ flags:
 models:
   test_dbt:
     # Config indicated by + and applies to all files under models/example/
-    silver:
+    minio-warehouse:
       +materialized: table
