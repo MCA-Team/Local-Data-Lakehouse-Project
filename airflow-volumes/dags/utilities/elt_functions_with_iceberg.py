@@ -2,7 +2,11 @@ from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.models.connection import Connection
 from pathlib import Path
 from typing import Any
-import duckdb, os, logging, functools, tomllib,requests
+from pyiceberg.catalog import load_catalog
+from pyiceberg.expressions import EqualTo
+import pyarrow.parquet as pq
+from pyarrow import fs
+import duckdb, os, logging, functools, tomllib,requests, pyarrow
 
 
 ########################################## CONSTANTS/VARIABLES ##########################################
@@ -97,15 +101,17 @@ def extract_raw_json_files_to_minio_bronze(toml_config:dict[str, Any], ds:str) -
                 logging.info(final_file.shape)
 
 
-# ===============================================================================================================================================
+
+def setup_environment(access_key: str, secret_key: str, region: str) -> None:
+    """Configure AWS environment variables for authentication."""
+    os.environ["AWS_ACCESS_KEY_ID"] = access_key
+    os.environ["AWS_SECRET_ACCESS_KEY"] = secret_key
+    os.environ["AWS_REGION"] = region
 
 
-
-
-# "Transform" function which processes data from Bronze Bucket to the Silver one
-def transform_bronze_data_to_silver(toml_config:dict[str, Any], ds:str) -> None:
+def load_raw_parquet_files_to_bronze_iceberg_table(toml_config:dict[str, Any], ds:str) -> None:
     """
-    Transforms data from MinIO Bronze Bucket to the Silver Bucket.
+    Loads raw parquet files from MinIO Bronze Bucket to the Iceberg Bronze Table.
     Args:
         toml_config (dict[str, Any]): The TOML configuration dictionary.
         ds (str): The DAG run's execution date in 'YYYY-MM-DD' format. Automatically passed by Airflow.
@@ -113,52 +119,66 @@ def transform_bronze_data_to_silver(toml_config:dict[str, Any], ds:str) -> None:
         None
     """
     partition_path:str = _get_partition_path_blueprint(ds)
-    # Example: Silver partition path is: year=2026/month=02/day=23
-    logging.info(f"Silver partition path is: {partition_path}")
-
-    # Initialize S3Hook to interact with MinIO Bronze Bucket and list targeted files to transform
-    s3_hook:S3Hook = S3Hook(aws_conn_id=toml_config["STORAGE"]["airflow_aws_connection_id"])  # Connection pointing to MinIO container and have to be configured through Airflow webserver UI > Admin > Connections
-    files_to_transform_list:list[str] = s3_hook.list_keys(bucket_name=toml_config["STORAGE"]["bronze_bucket_name"], 
-                                                          prefix=f"{partition_path}")
-    # Example: Bronze files to be transformed: ['year=2026/month=02/day=23/sales_2025.json', 'year=2026/month=02/day=23/sales_2026.json']
-    logging.info(f"Bronze files to be transformed: {files_to_transform_list}")
-
-    # Data idempotency and consistency: Clear existing files in the targeted partition path in MinIO Silver Bucket
-    files_in_silver_partition_path:list[str] = s3_hook.list_keys(bucket_name=toml_config["STORAGE"]["silver_bucket_name"], 
-                                                                 prefix=f"{partition_path}")
-    if len(files_in_silver_partition_path) > 0:
-        s3_hook.delete_objects(bucket=toml_config["STORAGE"]["silver_bucket_name"], 
-                               keys=files_in_silver_partition_path)
-        logging.info(f"Existing files were removed from MinIO Silver Bucket at the path: {partition_path}/")
-
-    # Opening an in-memory connection to DuckDB engine with a AWS S3 configuration 
-    with duckdb.connect(config = _get_duckdb_s3_config(toml_config=toml_config)) as conn:
-        # Ensure httpfs extension is installed and loaded for interactions between MinIO S3 API and DuckDB engine
-        if conn.sql("SELECT installed FROM duckdb_extensions() where extension_name='httpfs' AND installed='true'").shape[0] == 0:
-            conn.execute("INSTALL httpfs;")
-        if conn.sql("SELECT loaded FROM duckdb_extensions() where extension_name='httpfs' AND loaded='true'").shape[0] == 0:
-            conn.execute("LOAD httpfs;")
-
-    # Using trino engine to perform transformations from Bronze to Silver layer instead of DuckDB, as Trino is more performant for big data processing and can be easily scaled if needed.
-    # conn = connect(
-    #         host="trino-engine",  # Use the hostname defined in docker-compose.yaml for the Trino container
-    #         port=8080,
-    #         user="trino",
-    #         catalog="tutorial_catalog",
-    #         schema="test_schema",
-    #     )
-
-        # Transformation logic goes there
-        for bronze_file_path in files_to_transform_list:
-            _apply_silver_transformations_and_write_parquet( 
-                                                             toml_config=toml_config,
-                                                             duckdb_connection=conn,
-                                                             fileToTransform_path=bronze_file_path, 
-                                                             silver_partition_path=partition_path
-                                                           )
-    logging.info("Data transformation from Bronze to Silver completed.")
+    # Example: Bronze partition path is: year=2026/month=02/day=23
+    logging.info(f"Bronze partition path is: {partition_path}")
 
 
+    f"s3://{toml_config['STORAGE']['bronze_bucket_name']}/raw_parquets/{partition_path}/"
+
+    s3_hook:S3Hook = S3Hook(aws_conn_id=toml_config["STORAGE"]["airflow_aws_connection_id"])
+    raw_parquet_files_in_bronze_partition_path:list[str] = s3_hook.list_keys(bucket_name=toml_config["STORAGE"]["bronze_bucket_name"],
+                                                                 prefix=f"raw_parquets/{partition_path}")
+    logging.info(f"Existing parquetfiles in MinIO Bronze Bucket : {raw_parquet_files_in_bronze_partition_path}")
+
+    setup_environment("airflow", "miniopasswd", "local")  # Set up environment variables for MinIO authentication
+
+    catalog = load_catalog(
+                    "minio_warehouse",
+                    **{
+                        "uri": "http://minio-aistor-server:9008/_iceberg",
+                        "warehouse": "minio-warehouse",
+                        "rest.sigv4-enabled": "true",
+                        "rest.signing-name": "s3tables",
+                        "rest.signing-region": "local",
+                        "s3.access-key-id": "airflow",
+                        "s3.secret-access-key": "miniopasswd",
+                        "s3.path-style-access": "true",
+                        "s3.endpoint": "http://minio-aistor-server:9008"
+                    }
+            )
+
+    # Configurer le filesystem explicitement pour MinIO
+    minio_fs = fs.S3FileSystem(
+        endpoint_override="http://minio-aistor-server:9008",
+        access_key="airflow",
+        secret_key="miniopasswd",
+        region="local",
+        scheme="http"
+    )
+
+    cols_to_remove = ['year', 'month', 'day']
+    table_identifier = ("sales_schema", "bronze_table")
+    table = catalog.load_table(table_identifier)
+    
+
+    day_filter = EqualTo("transaction_date", f"{ds}T00:00:00") 
+    # Overwrite the partition ensuring idempotency and consistency of data in the Iceberg Bronze table, then append the parquet file to the table. The overwrite action will only affect the partition corresponding to the parquet file's data (e.g., if the parquet file contains transactions dated "2022-03-22", only the partition "transaction_date=2022-03-22" will be overwritten in the Iceberg table, and not the entire table)
+
+    
+    tables = []
+
+    for bronze_parquet_file in raw_parquet_files_in_bronze_partition_path:
+        arrow_table = pq.read_table(f"{toml_config['STORAGE']['bronze_bucket_name']}/{bronze_parquet_file}", filesystem=minio_fs)
+        arrow_table = arrow_table.drop(cols_to_remove)  # Drop partition columns from the table schema before loading to Iceberg, as they will be added as partition columns in the Iceberg table definition
+        logging.info(f"Parquet file loaded: {bronze_parquet_file}")
+        logging.info(f"Parquet file schema: {arrow_table.schema}")
+        tables.append(arrow_table)
+        logging.info(f"Parquet file {bronze_parquet_file} loaded to Iceberg Bronze table")
+    
+    # Overwrite the partition ensuring idempotency and consistency of data in the Iceberg Bronze table, then append the parquet file to the table. The overwrite action will only affect the partition corresponding to the parquet file's data (e.g., if the parquet file contains transactions dated "2022-03-22", only the partition "transaction_date=2022-03-22" will be overwritten in the Iceberg table, and not the entire table)
+    final_table = pyarrow.concat_tables(tables)
+    table.overwrite(final_table, overwrite_filter=day_filter)
+    logging.info("All raw parquet files from MinIO Bronze Bucket were loaded to the Iceberg Bronze table")
 
 # ===============================================================================================================================================
 
