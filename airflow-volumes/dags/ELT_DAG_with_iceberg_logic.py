@@ -1,6 +1,7 @@
 from airflow import DAG
 from airflow.sensors.filesystem import FileSensor
 from airflow.operators.python import PythonOperator
+from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
 from airflow.operators.bash import BashOperator
 from datetime import datetime
 from utilities import elt_functions_with_iceberg
@@ -58,19 +59,55 @@ with DAG(
     )
 
     # Task BashOperator: Transform (filtering, aggregations) of data from Iceberg Bronze table data to MinIO silver and gold Iceberg tables using dbt.
-    transform = BashOperator(
-        task_id="dbt-transformation",
+    dbt_transform = BashOperator(
+        task_id="dbt-transformations",
         bash_command=f"dbt run --profiles-dir {DBT_PROFILES_DIR} --project-dir {DBT_PROJECT_DIR}",
         trigger_rule = "all_success"
     )
 
-    bronze_iceberg = PythonOperator(
-                        task_id="load_raw_parquet_files_to_bronze_iceberg_table",
-                        python_callable=elt_functions_with_iceberg.load_raw_parquet_files_to_bronze_iceberg_table,
-                        op_kwargs={"toml_config": config}
-                    )
+    populate_bronze_iceberg_table = PythonOperator(
+                                        task_id="load_raw_parquet_files_to_bronze_iceberg_table",
+                                        python_callable=elt_functions_with_iceberg.load_raw_parquet_files_to_bronze_iceberg_table,
+                                        op_kwargs={"toml_config": config}
+                                    )
+
+    create_iceberg_bronze_table_schema = SQLExecuteQueryOperator(
+        task_id='create_iceberg_bronze_table_schema',
+        conn_id='trino_conn',
+        sql=f"""
+            CREATE SCHEMA IF NOT EXISTS minio_warehouse.{config["STORAGE"]["minio_warehouse_namespace"]}
+            WITH (location = 's3a://minio-warehouse/')
+            """,
+        autocommit=True,
+        dag=dag
+    )
+
+    create_iceberg_bronze_table = SQLExecuteQueryOperator(
+        task_id='create_iceberg_bronze_table',
+        conn_id='trino_conn',
+        sql=f"""
+            CREATE TABLE IF NOT EXISTS minio_warehouse.{config["STORAGE"]["minio_warehouse_namespace"]}.{config["STORAGE"]["minio_warehouse_bronze_table_name"]} (
+               transaction_id VARCHAR,
+               transaction_date TIMESTAMP,
+               client_name VARCHAR,
+               customer_loyalty_member BOOLEAN,
+               basket_items_count INTEGER,
+               basket_items_product_name VARCHAR,
+               basket_items_quantity INTEGER,
+               basket_items_unit_price DOUBLE,
+               basket_items_total_amount DOUBLE,
+               total_amount DOUBLE,
+               currency VARCHAR,
+               payment_method VARCHAR,
+               ingestion_date DATE
+            )
+             WITH ( partitioning = ARRAY['ingestion_date'], format = 'PARQUET', location = 's3a://minio-warehouse/sales_schema/bronze_table/' )
+        """,
+        autocommit=True,
+        dag=dag
+    )
 
     # DAG's task interdependency
-    checking_raw_json_files_existence >> extract >> bronze_iceberg >> [transform, remove_local_files]
+    checking_raw_json_files_existence >> extract >> [create_iceberg_bronze_table_schema, remove_local_files] 
+    create_iceberg_bronze_table_schema >> create_iceberg_bronze_table >> populate_bronze_iceberg_table >> dbt_transform
 
-    # transform >> load
