@@ -433,6 +433,8 @@ services:
       "
     restart: on-failure
 
+# ================================= DATA QUERYING WITH TRINO AND HUE =================================
+
   trino-engine:
     image: trinodb/trino:479
     container_name: trino-engine
@@ -454,6 +456,17 @@ services:
       - ./trino-volumes/catalog:/etc/trino/catalog/
       # - ./trino-volumes/config.properties:/etc/trino/config.properties
 
+
+  hue:
+    image: gethue/hue:latest
+    container_name: hue-ui
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./hue-volumes/hue.ini:/usr/share/hue/desktop/conf/z-hue.ini
+    depends_on:
+      - trino-engine
+      - minio-aistor-server
       
 # ================================= BI WITH APACHE SUPERSET =================================
 
