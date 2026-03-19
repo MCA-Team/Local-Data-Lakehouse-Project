@@ -97,76 +97,120 @@ minio-volumes/
 ## Project directory structure
 Now, after setting up some stuff as shown in the previous section, the project directory's structure will look like this:
 ```bash
-$ tree -L 4
+$ tree -L 10
 .
 ├── airflow-volumes/
-│   ├── airflow_core_variables.env
-│   ├── airflow_metadata_postgres_variables.env
-│   ├── config/
-│   ├── dags/
-│   │   ├── ELT_DAG.py
-│   │   └── utilities/
-│   │       ├── dev-config.toml
-│   │       ├── elt_functions.py
-│   │       └── __init__.py
-│   ├── logs/
-│   ├── metadata-postgres-volume/
-│   └── plugins/
+│   ├── airflow_core_variables.env
+│   ├── airflow_metadata_postgres_variables.env
+│   ├── config/
+│   ├── dags/
+│   │   ├── include/
+│   │   │   └── sql/
+│   │   │       └── sales_elt/
+│   │   │           ├── create_bronze_iceberg_table_schema.sql
+│   │   │           └── create_bronze_iceberg_table.sql
+│   │   ├── sales_ELT_DAG.py
+│   │   └── utilities/
+│   │       ├── __init__.py
+│   │       └── sales_elt/
+│   │           ├── __init__.py
+│   │           ├── sales_elt_config.toml
+│   │           └── sales_elt_functions.py
+│   ├── logs/
+│   ├── metadata-postgres-volume/
+│   ├── plugins/
+│   └── test_dbt/
+│       ├── analyses/
+│       ├── dbt_profiles/
+│       │   └── profiles.yml
+│       ├── dbt_project.yml
+│       ├── logs/
+│       ├── macros/
+│       ├── models/
+│       │   ├── gold/
+│       │   │   ├── gold_table.sql
+│       │   │   └── schema.yml
+│       │   └── silver/
+│       │       ├── schema.yml
+│       │       ├── silver_table.sql
+│       │       └── sources.yml
+│       ├── README.md
+│       ├── seeds/
+│       ├── snapshots/
+│       ├── target/
+│       └── tests/
 ├── data/
 ├── doc/
 ├── docker-compose.yaml
 ├── dockerfile.airflow
 ├── docker-secrets/
-│   ├── airflow/
-│   │   ├── airflow_metadata_postgres_password.secrets
-│   │   ├── airflow_sql_alchemy_connection_string.secrets
-│   │   └── airflow_www_user_password.secrets
-│   ├── minio/
-│   │   └── minio_root_passwd.secrets
-│   └── superset/
-│       ├── superset_admin_password.secrets
-│       └── superset_postgres_password.secrets
+│   ├── airflow/
+│   │   ├── airflow_metadata_postgres_password.secrets
+│   │   ├── airflow_sql_alchemy_connection_string.secrets
+│   │   └── airflow_www_user_password.secrets
+│   ├── minio/
+│   │   └── minio_root_passwd.secrets
+│   └── superset/
+│       ├── superset_admin_password.secrets
+│       └── superset_postgres_password.secrets
+├── hue-volumes/
+│   └── hue.ini
+├── LICENSE
 ├── Makefile
 ├── minio-volumes/
-│   ├── certs/
-│   ├── data/
-│   ├── minio.license
-│   └── minio_variables.env
+│   ├── certs/
+│   ├── data/
+│   ├── minio.license
+│   └── minio_variables.env
 ├── README.md
 ├── requirements.txt
-└── superset-volumes/
-    ├── cache-redis-volume/
-    ├── docker-bootstrap.sh
-    ├── docker-entrypoint-initdb.d/
-    │   ├── cypress-init.sh
-    │   └── examples-init.sh
-    ├── docker-init.sh
-    ├── metadata-postgres-volume/
-    ├── pythonpath_dev/
-    │   ├── superset_config_local.example
-    │   └── superset_config.py
-    ├── requirements-local.txt
-    ├── superset_core_variables.env
-    ├── superset_home/
-    └── superset_metadata_postgres_variables.env
+├── superset-volumes/
+│   ├── cache-redis-volume/
+│   ├── docker-bootstrap.sh
+│   ├── docker-entrypoint-initdb.d/
+│   │   ├── cypress-init.sh
+│   │   └── examples-init.sh
+│   ├── docker-init.sh
+│   ├── metadata-postgres-volume/
+│   ├── pythonpath_dev/
+│   │   ├── superset_config_local.example
+│   │   └── superset_config.py
+│   ├── requirements-local.txt
+│   ├── superset_core_variables.env
+│   ├── superset_home/
+│   └── superset_metadata_postgres_variables.env
+└── trino-volumes/
+    └── catalog/
+        └── minio_warehouse.properties
 ```
 Let's explore each directory or file and figure out their purposes:
 - **airflow-volumes/**: This directory contains all required docker volumes and files to persist Apache Airflow's data. Thoses volumes are mount to directories to ensure data sharing between the Airflow-related containers and local files:
     - **`airflow_core_variables.env`**: This file contains a variable (`_AIRFLOW_WWW_USER_USERNAME`). This variable is the required username to log in Airflow UI.
-    - **`airflow_core_variables.env`**: This file contains 2 variables:
+    - **`airflow_metadata_postgres_variables.env`**: This file contains 2 variables:
         - **POSTGRES_USER**: which is the username to log in the Airflow metadata database.
         - **POSTGRES_DB**: which is the defined database for Airflow core components (where DAG runs, Airflow Connections,... will be written).
     - <u>***config/***</u>: Apache Airflow allows the user to use a custom configuration to run Airflow. Through this directory, the user can upload a [`airflow.cfg`](https://github.com/puckel/docker-airflow/blob/master/config/airflow.cfg) file detailling a custom Airflow configuration. If the directory is empty, Airflow will run by the default configuration.
-    - <u>***dags/***</u>: contains all DAG definitions which will be executed as DAG runs in Airflow. In this context, the only one DAG definition available is `ELT_DAG.py` file which describes the relation between each task from the raw data extraction (for bronze layer) to its refined one (stored in gold layer). This directory contains a subdirectory:
-        - ***dags/utilities/***: This directory has 2 files:
-            - **`dev-config.toml`**: Through this file, the ELT process (defined by `./airflow-volumes/dags/ELT_DAG.py` and `./airflow-volumes/dags/utilities/elt_functions.py` files) can be completely configured. The file contains a lot of variables the user can customize. It is configured with default values but feel free to modify it at your convenience. This file is designed for development environment usage. For production environment purposes, you can create a `prod-config.toml` file based on the development one.
-            - **`elt_functions.py`**: This file is a kind of module with function definitions. Those functions are written based on the values in the `airflow-volumes/dags/utilities/dev-config.toml` file and are called by `airflow-volumes/dags/ELT_DAG.py` file during the Airflow DAG run's execution. In production environment, if you have created a `prod-config.toml` file, you have just to modify the **line 10** of `airflow-volumes/dags/utilities/elt_functions.py` file like this:
-            ```python
-            CONFIG_PATH = Path(__file__).parent / "prod-config.toml"
-            ```
+    - <u>***dags/***</u>: contains all DAG definitions which will be executed as DAG runs in Airflow. In this context, the only one DAG definition available is `sales_ELT_DAG.py` file which describes the relation between each task from the raw data extraction (for bronze layer) to its refined one (stored in gold layer). This directory contains:
+        - ***include/sql/***: a subdirectory which contains sql scripts for each DAG use case. It contains the `sales_elt/` folder with SQL scripts for the sales-ELT practical use case.
+        - ***dags/utilities/***: It stores utilities directory for each DAG use case. For the sales-ELT practical use case (`sales_elt/`), it contains 2 files:
+            - **`sales_elt_config.toml`**: Through this file, the ELT process (defined by `./airflow-volumes/dags/sales_ELT_DAG.py` and `./airflow-volumes/dags/utilities/sales_elt/sales_elt_functions.py` files) can be completely configured. The file contains a lot of variables the user can customize. It is configured with default values but feel free to modify it at your convenience. This file is designed for development environment usage.
+            - **`sales_elt_functions.py`**: This file is a kind of module with function and constants definitions. Those functions are written based on the values in the `airflow-volumes/dags/utilities/sales_elt/sales_elt_config.toml` file and are called by `airflow-volumes/dags/sales_ELT_DAG.py` file during the Airflow DAG run's execution.
+
     - <u>***logs/***</u>: This directory contains all persisted Airflow logs (scheduler, webserver,...). Through these logs, the user is able to inspect what happened during a DAG's execution.
+
     - <u>***plugins/***</u>: All Airflow's installed plugins metadata will be stored in this directory.
+
     - <u>***metadata-postgres-volume/***</u>: In this directory, many informations about Airflow's metadata database are stored. In our case, the database is PostgreSQL.
+
+    - <u>***test_dbt/***</u>: This directory is a dbt-project with a classic architecture:
+        - ***dbt_profiles/***: this directory stores the `profiles.yml` file which defines the Trino profile required by dbt to run SQL queries defined in the models/ directory.
+        
+        - ***models/***: stores the SQL scripts which will apply transformations for Silver and Gold tables.
+            - ****silver/****: This directory contains a `schema.yml` defining the Silver table columns, a `silver_table.sql` defining the SQL queries for data transformation and a `sources.yml` defining the Bronze table which is the data source for Silver table.
+
+            - ****gold/****: This directory contains a `schema.yml` defining the Gold table columns and a `gold_table.sql` defining the SQL queries for data transformation (aggregation, computing).
+
+
 - **data/**: This directory will receive all `JSON` raw files that will be extracted and dumped into `Bronze` layer later.
 - **doc/**: contains some elements for `README.md` documentation file tweaking.
 - **`docker-compose.yaml`**: This `.yaml` file describes the local data lakehouse architecture as a docker stack where each service is interconnected. There are 3 main different parts: the data orchestration side with Airflow-related services, the storage side with MinIO services and the BI side with Superset-related ones.
@@ -181,18 +225,30 @@ Let's explore each directory or file and figure out their purposes:
     - <u>***superset/***</u>: Contains secrets for Superset BI services:
         - **`superset_admin_password.secrets`**: contains the required Administrator User's password to log in the Superset UI through a browser.
         - **`superset_postgres_password.secrets`**: contains the password for the Superset metadata database.
-- **Makefile**: The file which contains preset commands definitions. The commands executed with the `make` keyword are defined there. It allows wrapping up complex commands sequences into a one.
+
+- **hue-volumes/**: This directory contains persisted data required for Hue container's especially the `hue.ini` config file which defines Hue's UI behaviour and integrates Trino engine.
+
+- **`LICENSE`**: The project's LICENSE : Apache-2.0 license
+
+- **`Makefile`**: The file which contains preset commands definitions. The commands executed with the `make` keyword are defined there. It allows wrapping up complex commands sequences into a one.
+
 - **minio-volumes/**: This directory contains all required docker volumes and files to persist MinIO AIStor's data. Thoses volumes are mount to ensure data sharing between the MinIO container and local files:
     - <u>***certs/***</u>: This directory holds security certificates and shares them with MinIO's container. Especially for TLS configuration, this should be helpful.
+
     - <u>***data/***</u>: This directory contains the some data about the MinIO container (configuration files, buckets informations like logs, cache,...).
+
     - **`minio.license`**: It's the required activation license to run the MinIO container correctly. Without it, the MinIO container will not start (correctly).
+
     - **`minio_variables.env`**: This file contains the following variables: 
         - **MINIO_BRONZE_BUCKET_NAME**: Litterally the name of the Bronze bucket in the MinIO server.
         - **MINIO_SILVER_BUCKET_NAME**: Litterally the name of the Silver bucket in the MinIO server.
         - **MINIO_GOLD_BUCKET_NAME**: Litterally the name of the Gold bucket in the MinIO server.
         - **MINIO_ROOT_USER**: The required Root User's username to log in MinIO Console.
+
 - **README.md**: The documentation file.
-- **requirements.txt**: This file contains the definition of all necessary Python packages to build the `dockerfile.airflow` custom image.
+
+- **`requirements.txt`**: This file contains the definition of all necessary Python packages to build the `dockerfile.airflow` custom image.
+
 - **superset-volumes/**: Apache Supserset needs some configuration before running as a container. This directory holds the necessary configuration files/scripts and docker volumes for Superset's containers.
     - <u>***cache-redis-volume/***</u>: This directory persists Redis container data for Superset. Redis is the Superset's cache database.
     - <u>***docker-entrypoint-initdb.d/***</u>: The directory contains 2 files:
@@ -209,12 +265,15 @@ Let's explore each directory or file and figure out their purposes:
     - **`superset_core_variables.env`**: This file contains a set of required variables for Superset core containers. Each variable role is explained within the file.
     - **`superset_metadata_postgres_variables.env`**: This file contains a set of variables for Superset metadata database credentials.
 
+- **trino-volumes/**: This directory contains persisted data required for Trino engine container's especially the `catalog/minio_warehouse.properties` config file which configures Trino to access MinIO's Iceberg REST catalog.
+
 ## Local lakehouse architecture explained
 The architecture is pretty simple. The core is composed by 3 parts :
 - **The data orchestration**: represented by Apache Airflow's ecosystem. It controls the tasks flows and triggers specific tasks accordingly to specific events.
-- **The data storage**: which models the Medallion architecture. MinIO which is a S3-compatible Object Storage is fitted for this role. With 3 buckets, each associated to Bronze - Silver - Gold concepts, it fulfills data storage requirements for this use case.
+- **The data storage**: which models the Medallion architecture. MinIO which is a S3-compatible Object Storage with data warehouse implementation ([AIStor tables](https://www.min.io/product/aistor/structured-data-store)) is fitted for this role and fulfills data storage requirements for this use case.
 - **The BI (Business Intelligence)**: Apache Superset is a modern, open-source and efficient BI tool which totally satisfies BI requirements, providing rich charts and visualization assets.
 
+=========================== TO REVISE ===========================
 > How do these 3 parts interact ?
 
 <image src="./doc/arch.png" width=1000 center>
