@@ -318,6 +318,9 @@ Address     | Container/service
 [http://localhost:8080](http://localhost:8080) | Apache Airflow Webserver UI
 [http://localhost:8088](http://localhost:8088) | Apache Superset Webapp UI
 [http://localhost:9009](http://localhost:9009) | MinIO AIStor Console UI
+[http://localhost:8085](http://localhost:8085) | dbt generated doc hosted by Nginx
+[http://localhost:8081](http://localhost:8081) | Trino Web UI
+[http://localhost:8888](http://localhost:8888) | Hue Web UI
 
 After setting up the insfrastructure, the user must configure some stuffs in order to ensure everything is running well:
 
