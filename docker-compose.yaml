@@ -467,7 +467,21 @@ services:
     depends_on:
       - trino-engine
       - minio-aistor-server
-      
+
+
+# ================================= DBT DOCUMENTATION =================================
+
+  dbt-docs:
+      image: nginx:alpine
+      container_name: dbt-docs
+      hostname: local-lakehouse-dbt-docs
+      restart: always
+      volumes:
+        - ./airflow-volumes/test_dbt/target:/usr/share/nginx/html
+      ports:
+        - "8085:80"
+
+
 # ================================= BI WITH APACHE SUPERSET =================================
 
   superset-cache-database:
