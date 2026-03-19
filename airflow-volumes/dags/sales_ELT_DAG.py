@@ -4,7 +4,7 @@ from airflow.operators.python import PythonOperator
 from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
 from airflow.operators.bash import BashOperator
 from datetime import datetime
-from utilities import sales_elt_functions
+from utilities.sales_elt import sales_elt_functions
 
 
 # Loading of TOML config file's variables
@@ -66,6 +66,12 @@ with DAG(
         trigger_rule = "all_success"
     )
 
+    dbt_documentation = BashOperator(
+        task_id="dbt-documentation-generation",
+        bash_command=f"dbt docs generate --project-dir {DBT_PROJECT_DIR} --profiles-dir {DBT_PROFILES_DIR}",
+        trigger_rule = "all_success"
+    )
+
     # Task PythonOperator: Loading of raw parquet files from MinIO bronze bucket to the Iceberg Bronze table in the MinIO warehouse. This task is executed only after the successful creation of the Iceberg Bronze table and it ensures idempotent loading of data by using the "ingestion_date" partition column in the Iceberg Bronze table.
     populate_bronze_iceberg_table = PythonOperator(
                                         task_id="load_raw_parquet_files_to_bronze_iceberg_table",
@@ -103,5 +109,5 @@ with DAG(
 
     # DAG's task interdependency
     checking_raw_json_files_existence >> extract >> [create_iceberg_bronze_table_schema, remove_local_files] 
-    create_iceberg_bronze_table_schema >> create_iceberg_bronze_table >> populate_bronze_iceberg_table >> dbt_transform
+    create_iceberg_bronze_table_schema >> create_iceberg_bronze_table >> populate_bronze_iceberg_table >> dbt_transform >> dbt_documentation
 
