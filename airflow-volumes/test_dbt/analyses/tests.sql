@@ -1,1 +1,0 @@
-SELECT * FROM tutorial_catalog.test_schema.users;
