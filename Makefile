@@ -37,13 +37,14 @@ setup-infra: ## Automatically sets up the infra by creating the containers, the 
 	@sleep 5
 # 	@docker compose rm -f superset-init minio-autocreate-buckets
 	@echo "Infrastructure successfully set up !\n"
-	@echo  "====================== SERVICE URLS: ======================"
-	@echo "Airflow Webserver UI:      http://localhost:8080"
-	@echo "MinIO AIStor Web Console:  http://localhost:9001"
-	@echo "Apache Superset Web UI:    http://localhost:8088"
-	@echo "Trino Web UI:              http://localhost:8081"
-	@echo "Hue Web UI:                http://localhost:8888"
-	@echo "============================================================="
+	@echo "========================== SERVICE URLS: =========================="
+	@echo "Airflow Webserver UI:      			http://localhost:8080"
+	@echo "MinIO AIStor Web Console:  			http://localhost:9001"
+	@echo "Apache Superset Web UI:    			http://localhost:8088"
+	@echo "Trino Web UI:              			http://localhost:8081"
+	@echo "Hue Web UI:                			http://localhost:8888"
+	@echo "dbt generated doc hosted by Nginx: 	http://localhost:8085"
+	@echo "===================================================================="
 	@echo "To stop the infra and remove the containers and the network(s), run the command: make shutdown-infra"
 
 shutdown-infra:	## Automatically shuts down the infra removing the containers and the network(s)
