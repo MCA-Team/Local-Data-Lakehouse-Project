@@ -80,13 +80,9 @@ top_category AS (
         AND t1.transaction_date = t2.transaction_date
         AND t1.ingestion_date = t2.ingestion_date
 )
--- avg_order_value AS (
---     SELECT
-         
--- )
 
 SELECT
-     tr.transaction_date, 
+     tr.transaction_date AS sales_day, 
      tr.total_revenue, 
      oc.order_count,
      tr.total_revenue/oc.order_count AS avg_order_value,
