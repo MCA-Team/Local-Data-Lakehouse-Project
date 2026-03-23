@@ -25,3 +25,5 @@ models:
         description: "The method of payment used for the transaction (e.g., credit card, cash, etc.)."
       - name: ingestion_date
         description: "The date when the transaction data was ingested into the silver table."
+        data_test:
+          - not_null
