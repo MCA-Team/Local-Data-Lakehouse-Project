@@ -1,0 +1,1 @@
+CREATE SCHEMA IF NOT EXISTS minio_warehouse.test_schema;
