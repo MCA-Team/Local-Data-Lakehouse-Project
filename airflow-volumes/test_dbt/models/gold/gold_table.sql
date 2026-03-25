@@ -84,7 +84,7 @@ top_category AS (
 SELECT
      tr.transaction_date AS sales_day, 
      tr.total_revenue, 
-     oc.order_count,
+     CAST(oc.order_count AS INT) AS order_count,
      tr.total_revenue/oc.order_count AS avg_order_value,
      tc.top_category_product_name,
      tc.top_category_total_revenue,

@@ -3,21 +3,31 @@ models:
     description: "This is the gold table created from the silver table. It contains data from the silver table but with additional transformations and aggregations."
     columns:
       - name: sales_day
+        data_type: date
         description: "The date on which sales are aggregated."
         data_test:
           - not_null
           - unique
+        constraints:
+          - type: not_null
+          - type: primary_key
       - name: total_revenue
+        data_type: double
         description: "The total revenue generated from the transaction, calculated as the sum of (item_quantity * item_price) for all items in the transaction."
       - name: order_count
+        data_type: integer
         description: "The total number of items in the transaction, calculated as the sum of distinct transaction_ids."
       - name: avg_order_value
+        data_type: double
         description: "The average order value for the transaction, calculated as total_revenue divided by order_count."
       - name: top_category_product_name
+        data_type: varchar
         description: "The name of the product that generated the highest revenue for the transaction."
       - name: top_category_total_revenue
+        data_type: double
         description: "The total revenue generated from the top category for the sales_day."
       - name: ingestion_date
+        data_type: date
         description: "The date when the transaction data was ingested into the gold table."
         data_test:
           - not_null

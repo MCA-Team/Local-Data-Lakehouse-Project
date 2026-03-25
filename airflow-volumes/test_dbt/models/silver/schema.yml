@@ -3,27 +3,40 @@ models:
     description: "This is the silver table created from the raw parquet files in the MinIO bronze bucket. It contains the same data as the raw parquet files but with a defined schema and partitioned by transaction_date."
     columns:
       - name: transaction_id
+        data_type: varchar
         description: "The unique identifier for each transaction."
         data_test:
           - not_null
           - unique
+        constraints:
+          - type: not_null
+          - type: primary_key
       - name: transaction_date
+        data_type: timestamp
         description: "The date and time when the transaction occurred."
       - name: client_name
+        data_type: varchar
         description: "The name of the client who made the transaction."
       - name: item_product_name
+        data_type: varchar
         description: "The name of the product that was purchased in the transaction."
       - name: item_quantity
+        data_type: integer
         description: "The quantity of the product that was purchased in the transaction."
       - name: item_unit_price
+        data_type: double
         description: "The unit price of the product that was purchased in the transaction."
       - name: total_amount
+        data_type: double
         description: "The total amount of the purchased product_name (calculated as item_quantity * item_unit_price)."
       - name: transaction_currency
+        data_type: varchar
         description: "The currency in which the transaction was made (e.g., USD, EUR, etc.)."
       - name: payment_method
+        data_type: varchar
         description: "The method of payment used for the transaction (e.g., credit card, cash, etc.)."
       - name: ingestion_date
+        data_type: date
         description: "The date when the transaction data was ingested into the silver table."
         data_test:
           - not_null
