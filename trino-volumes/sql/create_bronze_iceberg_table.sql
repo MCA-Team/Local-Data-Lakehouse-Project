@@ -1,5 +1,5 @@
 
-CREATE TABLE IF NOT EXISTS minio_warehouse.test_schema.test_table (
+CREATE TABLE IF NOT EXISTS minio_warehouse.sales_schema.bronze_table (
     transaction_id VARCHAR COMMENT 'The unique identifier for each transaction.',
     transaction_date TIMESTAMP COMMENT 'The date and time when the transaction occurred.',
     client_name VARCHAR COMMENT 'The name of the client who made the transaction.',
