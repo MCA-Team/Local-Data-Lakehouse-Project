@@ -40,3 +40,5 @@ models:
         description: "The date when the transaction data was ingested into the silver table."
         data_test:
           - not_null
+        constraints:
+          - type: not_null
