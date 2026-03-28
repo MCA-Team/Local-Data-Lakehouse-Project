@@ -452,8 +452,11 @@ services:
       timeout: 10s
       retries: 5
       start_period: 5s
+    depends_on:
+      - minio-aistor-server
     volumes:
       - ./trino-volumes/catalog:/etc/trino/catalog/
+      - ./trino-volumes/sql:/etc/trino/sql/
       # - ./trino-volumes/config.properties:/etc/trino/config.properties
 
 
@@ -480,6 +483,20 @@ services:
         - ./airflow-volumes/test_dbt/target:/usr/share/nginx/html
       ports:
         - "8085:80"
+
+
+
+# ================================= SEMANTIC LAYER WITH CUBEJS =================================
+
+  cube:
+    image: cubejs/cube:latest
+    ports:
+      - 4000:4000
+      - 15432:15432
+    environment:
+      - CUBEJS_DEV_MODE=true
+    volumes:
+      - .:/cube/conf
 
 
 # ================================= BI WITH APACHE SUPERSET =================================
