@@ -490,13 +490,18 @@ services:
 
   cube:
     image: cubejs/cube:latest
+    hostname: local-lakehouse-cubejs
+    container_name: cubejs
+    env_file:
+      - path: ./cubejs-volumes/cube.env
+        required: true
     ports:
       - 4000:4000
       - 15432:15432
     environment:
       - CUBEJS_DEV_MODE=true
     volumes:
-      - .:/cube/conf
+      - ./cubejs-volumes/conf:/cube/conf
 
 
 # ================================= BI WITH APACHE SUPERSET =================================
