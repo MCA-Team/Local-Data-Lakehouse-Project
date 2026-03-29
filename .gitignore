@@ -20,6 +20,7 @@ superset-volumes/superset_home
 data/*
 !data/.gitkeep
 docker-secrets/*
+cubejs-volumes/conf/*
 
 # Windows system files
 Thumbs.db
