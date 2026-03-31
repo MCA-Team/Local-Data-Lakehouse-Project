@@ -17,3 +17,9 @@ CREATE TABLE IF NOT EXISTS minio_warehouse.sales_schema.bronze_table (
     COMMENT 'Bronze Iceberg table which retrieves raw ingested data.'
     WITH ( partitioning = ARRAY['ingestion_date'], 
            format = 'PARQUET');
+
+-- ALTER TABLE minio_warehouse.sales_schema.bronze_table 
+-- SET PROPERTIES (
+--     -- Snapshots retrieval duration (7 days for example)
+--     'vacuum_max_snapshot_age' = '7d'
+-- );
