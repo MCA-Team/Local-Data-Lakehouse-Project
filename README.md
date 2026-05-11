@@ -278,9 +278,11 @@ The architecture is pretty simple. The core is composed by 3 parts :
 
 <image src="./doc/arch.png" width=1000 center>
 
-The 3 elements above interact in an ELT process pattern. Apache Airflow configures some tasks. The first Airflow task scans `./data/` directory in order to find `.json` files following the `sales*.json` name pattern. If no file is found, The process exits. Otherwise, Airflow starts its second task which picks found files from `./data/` directory and dumps them into MinIO Bronze bucket. After this operation, files are automatically removed from `./data/` directory. Then, the Bronze bucket's files are selected, processed by DuckDB in-memory engine (installed in Airflow-scheduler container through `./requirements.txt` file) and saved as `.parquet` files into MinIO Silver bucket. Finally, for BI purposes, the last Airflow's task uses the processed Silver files, and apply refined processings like aggregations in order to keep only one line per date. Those new processed files are saved into MinIO Gold bucket as `.parquet` files.
+The 3 elements above interact in an ELT process pattern. Apache Airflow orchestrates some tasks. The first Airflow task scans `./data/` directory in order to find `.json` files following the `sales*.json` name pattern. If no file found, The process exits. Otherwise, Airflow starts its second task which picks found files from `./data/` directory and dumps them into MinIO Bronze bucket's landing zone. After this operation, files are automatically removed from `./data/` directory. Then, the Bronze bucket's JSON files are selected, are processed by *DuckDB* in-memory engine (installed in Airflow-scheduler container through `./requirements.txt` file) and *PyArrow* and are saved as `.parquet` files into Bronze Iceberg Table. Then *dbt* processes `.parquet` files in the Bronze table (denormalization, restructuration, cleaning up, ...) through the Trino engine. The cleaned data is loaded to the Silver Iceberg Table. For BI purposes, *dbt* uses the processed Silver files, and applies refined processings like aggregations in order to keep only one line per date. Those new processed files are saved in the Gold Iceberg Table as `.parquet` files. After that, a dbt documentation is generated and served through a Nginx service.
 
-After that, Apache Superset is preconfigured with DuckDB-engine to allow requests between Superset itself and MinIO Gold bucket files. Then, through SQL queries and drag-and-drop components, a neat and informative dashboard can spring up. That's the global data flow of this local data lakehouse system.
+Apache Superset is preconfigured with Trino engine to allow requests between Superset itself and the Gold Iceberg Table. Then, through SQL queries and drag-and-drop components, a neat and informative dashboard can spring up. That's the global data flow of this local data lakehouse system.
+
+Hue is an interactive interface which is pre-configured to be connected to Trino engine and MinIO filesystem.
 
 > The `./airflow-volumes/dags/ELT_DAG.py` example of use case.
 
@@ -293,7 +295,7 @@ The structure of a `sales*.json` file looks like this:
 > After the data extraction task successfully wrote the files in Bronze bucket, another task must remove the files from `./data/` directory for local memory purpopes and because Bronze bucket acts like a data lake and the only source of truth in the architecture.
 
 > [!NOTE]
-> For **data idempotency and partioning** purposes, the files are stored in MinIO following a temporal file structure for each bucket : `/year=2024/month=01/day=15/sales_20240115.parquet` for example. This allows the user to replay a specific day without impacting the rest.
+> For **data idempotency and partioning** purposes, the files are stored in MinIO following a temporal file structure for each bucket : `ingestion_date=2026-03-05/` for example. This allows the user to replay a specific day without impacting the rest.
 
 > [!NOTE]
 > This infrastructure is designed following a Modern Data Stack (MDS) logic.
@@ -354,38 +356,23 @@ It is a Airflow's feature that allows the user to store sensitive information li
 
 <image src="./doc/minio_conn.gif" width=1000 center>
 
-### 2. Apache Superset configuration
-Apache Superset needs a SQL engine to query data from Gold bucket and display it on the dashboard. DuckDB in-memory engine is already embedded in our Superset container. So, the user needs to connect Superset to this engine through **"+ > Data > Connect database"** by following the steps shown below:
+### 2. Trino configuration
+Trino is a SQL engine which allows the user to execute queries against Iceberg tables within the data lakehouse. Airflow needs to be connected to the Trino service in order to use PyArrow and load files into Bronze Iceberg table.
 
-<image src="./doc/superset_duckdb.gif" width=1000 center>
+<image src="./doc/trino_conn.gif" width=1000 center>
 
-- Use SQLAlchemy DuckDB URI for the connection
-    - for in-memory usage
-        ```
-        duckdb:///:memory:
-        ```
-    - if the user wants to persist data through DuckDB Engine (replace <DB_NAME> by the db file name, `superset.db` for example)
-        ```
-        duckdb:///<DB_NAME>.db
-        ```
-- The JSON snippet below allows Superset DuckDB's engine to communicate with MinIO's S3 API through an endpoint. Copy and paste the snippet for **Engine Parameters** section (replace `MINIO_ROOT_USER` (accessible trough `./minio-volumes/minio_variables.env` file) and `MINIO_ROOT_PASSWORD` (`./docker-secrets/minio/minio_root_passwd.secrets` file) variables by their respective value):
-```json
-{
-    "connect_args": {
-        "config": {
-            "s3_endpoint": "minio-aistor-server:9008",
-            "s3_access_key_id": "MINIO_ROOT_USER",
-            "s3_secret_access_key": "MINIO_ROOT_PASSWORD",
-            "s3_use_ssl": "false",
-            "s3_url_style": "path"
-        }
-    }
-}
+### 3. Apache Superset configuration
+Apache Superset needs a SQL engine to query data from Gold bucket and display it on the dashboard. Trino engine is already embedded in our Superset container. So, the user needs to connect Superset to this engine through **"+ > Data > Connect database"** by following the steps shown below:
+
+<image src="./doc/superset_trino.gif" width=1000 center>
+
+- Use the Trino's SQLAlchemy URI for the connection
 ```
-Then, the user have to create a Superset dataset which is a kind of table view in Superset. In our case, it's simple to do it through the **Superset SQL Lab** with the simple DuckDB SQL request below (replace `MINIO_GOLD_BUCKET_NAME`, `YEAR`, `MONTH` and `DAY` by the correct values in order to have the right path to the files in the MinIO Gold bucket. The `MINIO_GOLD_BUCKET_NAME` variable is accessible through `./minio-volumes/minio_variables.env` file):
-```sql
-SELECT * FROM read_parquet("s3://MINIO_GOLD_BUCKET_NAME/year=YEAR/month=MONTH/day=DAY/*.parquet");
+trino://trino:@trino-engine:8080/minio_warehouse
 ```
+
+Then, the user have to create a Superset dataset which is a kind of table view in Superset. In our case, it's simple to do it through the **Superset SQL Lab** :
+
 <image src="./doc/superset_dataset.gif" width=1000 center>
 
 Now, the user can build a custom BI dashboard based on the created dataset. There is an example of Dashboard:
@@ -424,7 +411,7 @@ id -u
 > Cypress is being phased out in favor of Playwright. Use Playwright for all new tests.
 
 ## What next ?
-This first iteration was oriented development. A more optimized and production-focused iteration is in preparation.
+This second iteration is focused on the implementation the Iceberg environment and its management. A more optimized and production-focused iteration with Kubernetes is in preparation.
 
 ## Resources
 Apache Superset official documentation: [click here](https://superset.apache.org/user-docs/)
@@ -438,3 +425,11 @@ MinIO AIStor official documentation: [click here](https://docs.min.io/enterprise
 DuckDB official documentation: [click here](https://duckdb.org/docs/stable/)
 
 Docker docs: [click here](https://docs.docker.com/manuals/)
+
+Apache Iceberg docs: [click here](https://iceberg.apache.org/)
+
+Trino docs: [click here](https://trino.io/docs/current/overview.html)
+
+Hue docs: [click here](https://docs.gethue.com/quickstart/)
+
+dbt docs: [click here](https://docs.getdbt.com/docs/get-started-dbt?version=1.12)
