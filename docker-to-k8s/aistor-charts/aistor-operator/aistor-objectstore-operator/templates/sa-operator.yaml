@@ -1,0 +1,14 @@
+---
+# Source: aistor-objectstore-operator/templates/sa-operator.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: aistor-adminjob
+  namespace: "default"
+---
+# Source: aistor-objectstore-operator/templates/sa-operator.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: aistor-object-store
+  namespace: "default"

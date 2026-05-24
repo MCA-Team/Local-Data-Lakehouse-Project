@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minio-deployment
+  labels:
+    app: minio-aistor
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: minio-aistor
+  template:
+    metadata:
+      labels:
+        app: minio-aistor
+    spec:
+      containers:
+      - name: minio-aistor-server
+        image: quay.io/minio/aistor/minio:RELEASE.2026-02-07T07-43-34Z
+        ports:
+        - containerPort: 9000
+          name: minio-port
+
+
+--- # MinIO service
+# The blueprint of our MinIO internal service in k8s cluster which will allow the requests exchange between the pods
+# LoadBalancer service for testing purposes currently
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio-service
+spec:
+  selector:
+    app: minio-aistor
+  type: LoadBalancer
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: minio-port
+    nodePort: 30090

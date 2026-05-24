@@ -1,0 +1,15 @@
+objectStore:
+   name: minio-object-store # name of the AIStor Server
+   pools:
+   - name: pool-0
+     servers: 1 # Number of servers/pods to deploy (1 for free licenses, more for paid licenses)
+     volumesPerServer: 1 # Number of Persistent Volumes per Server/Pod
+     size: 2Gi # Size of each PV
+#    storageClassName: directpv-min-io # Storage Class assigned to each PV
+   services:
+      minio:
+         serviceType: NodePort
+         nodePort: 31000 # Select an available NodePort in the supported range of 30000-32767
+      console:
+         serviceType: NodePort
+         nodePort: 31200 # Select an available NodePort in the supported range of 30000-32767
