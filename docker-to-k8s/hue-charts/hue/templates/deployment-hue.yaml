@@ -1,0 +1,93 @@
+---
+# Source: hue/templates/deployment-hue.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hue
+  labels:
+    deployment: hue
+
+spec:
+  selector:
+    matchLabels:
+      pod: hue
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        pod: hue
+      annotations:
+        checksum/config: 27c8012de45d3abd58898160e30f04c5797818ab6baf08b9b827051339c624a0
+        checksum/config-extra: 82449ce52e26d3fb34110efeba2d1aa0bf518bb90d06f7323dfdef2a18dadc1f
+        checksum/config-hive: c58fde318bb6a33b9e6a641bf274df60c32a7e64955105389950e1ad00006bb8
+    spec:
+
+      initContainers:
+        - name: hue-init
+          image: gethue/hue:latest
+          imagePullPolicy: Always
+          args:
+            - /bin/sh
+            - -c
+            - >
+              set -x;
+              while [ $(curl -s --connect-timeout 1 postgres-hue:5432 || echo $?) -ne 52 ]; do
+                sleep 1;
+              done
+
+      containers:
+      - name: hue
+        image: gethue/hue:latest
+        imagePullPolicy: Always
+        ports:
+          - containerPort: 8888
+        resources:
+          requests:
+            # memory: "350Mi"
+            cpu: "50m"
+        volumeMounts:
+        - name: config-volume
+          mountPath: /usr/share/hue/desktop/conf/z-hue.ini
+          subPath: hue-ini
+        - name: config-volume-extra
+          mountPath: /usr/share/hue/desktop/conf/zz-hue.ini
+          subPath: hue-ini
+        - name: hive-config-volume
+          mountPath: /etc/hive/conf/hive-site.xml
+          subPath: hive-site
+        readinessProbe:
+          httpGet:
+            path: /desktop/debug/is_alive
+            port: 8888
+          initialDelaySeconds: 3
+          periodSeconds: 3
+          failureThreshold: 30
+
+      - name: nginx
+        image: gethue/nginx:latest
+        imagePullPolicy: Always
+        ports:
+          - containerPort: 80
+        resources:
+          requests:
+            # memory: "64Mi"
+            cpu: "20m"
+        volumeMounts:
+        - name: nginx-config
+          mountPath: /etc/nginx/sites-available/hue
+          subPath: hue
+
+      volumes:
+        - name: config-volume
+          configMap:
+            name: hue-config
+        - name: config-volume-extra
+          configMap:
+            name: hue-config-extra
+        - name: hive-config-volume
+          configMap:
+            name: hive-config
+
+        - name: nginx-config
+          configMap:
+            name: nginx-config

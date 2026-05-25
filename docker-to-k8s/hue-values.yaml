@@ -1,0 +1,64 @@
+image:
+   registry: "gethue"
+   tag: "latest"
+   pullPolicy: "Always"
+
+hue:
+  replicas: 2
+  database:
+    create: true
+    persist: true
+    engine: "sqlite3"
+    host: "postgres-hue"
+    port: 5432
+    user: "hue"
+    password: "hue"
+    #password_script=echo ${DATABASE_PASSWORD}
+    name: "hue"
+    storageName: "microk8s-hostpath"
+  interpreters: |
+    [[[postgresql]]]
+      name = postgresql
+      interface=sqlalchemy
+      options='{"url": "postgresql://hue:hue@postgres-hue:5432/hue"}'
+  ini: |
+    [desktop]
+    secret_key=
+    http_host=0.0.0.0
+    http_port=8888
+    time_zone=Europe/Paris
+    # Enable or disable backtrace for server error
+    http_500_debug_mode=false
+    app_blacklist=hive,impala,security,search,pig,oozie,jobbrowser, hbase
+
+    [[storage_connectors]]
+        [[[minio_dev]]]
+            provider=generic
+            auth_type=key
+            endpoint=http://minio:80
+            # MinIO Access ID (Username)
+            access_key_id=minio
+            # MinIO Secret Key (Password)
+            secret_key=minio123
+            options={"signature_version": "s3v4"}
+
+    [notebook]
+        # Activate notebooks creation in Hue
+        show_notebooks=true
+        # Allow sharing notebooks with other users
+        enable_notebook_2=true
+
+        [[interpreters]]
+            [[[trino]]]
+                name=Trino
+                interface=trino
+                # (SQLAchemy interface) options format: trino://user@host:port/catalog/schema
+                options='{"url": "http://trino:8080/test-warehouse/"}'
+
+
+    [dashboard]
+        # Activate the SQL Dashboard (beta).
+        has_sql_enabled=true
+
+
+

@@ -1,0 +1,41 @@
+---
+# Source: aistor-objectstore/templates/object-store.yaml
+apiVersion: aistor.min.io/v1
+kind: ObjectStore
+metadata:
+  name: myminio
+  namespace: "default"
+  ## Optionally pass labels to be applied to the statefulset pods
+  labels:
+    app: minio
+  annotations:
+    aistor.min.io/helm-chart-version: "aistor-objectstore-1.0.14"
+spec:
+  ## Secret with default environment variable configurations
+  configuration:
+    name: myminio-env-configuration
+  pools:
+    - servers: 4
+      
+      name: pool-0
+      volumesPerServer: 4
+      volumeClaimTemplate:
+        metadata:
+          name: "data"
+        spec:
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 10Gi
+  mountPath: "/export"
+  subPath: "/data"
+  certificates:
+    disableAutoCert: false
+  podManagementPolicy: Parallel
+  services:
+    console:
+      serviceType: ClusterIP
+    minio:
+      serviceType: ClusterIP
+  prometheusOperator: false
