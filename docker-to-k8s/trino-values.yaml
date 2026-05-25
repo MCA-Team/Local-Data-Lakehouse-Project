@@ -1,0 +1,65 @@
+# Default values for trino.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# -- Override resource names to avoid name conflicts when deploying multiple
+# releases in the same namespace.
+# @raw
+# Example:
+# ```yaml
+# coordinatorNameOverride: trino-coordinator-adhoc
+# workerNameOverride: trino-worker-adhoc
+# nameOverride: trino-adhoc
+# fullnameOverride: trino-adhoc
+# ```
+nameOverride:
+fullnameOverride:
+coordinatorNameOverride:
+workerNameOverride:
+
+
+server:
+  workers: 2
+
+catalogs:
+  tpch: |
+    connector.name=tpch
+    tpch.splits-per-node=4
+  tpcds: |
+    connector.name=tpcds
+    tpcds.splits-per-node=4
+  minio_warehouse: |
+    connector.name=iceberg
+    iceberg.catalog.type=rest
+    iceberg.rest-catalog.uri=http://minio:80/_iceberg
+    iceberg.rest-catalog.warehouse=test-warehouse
+    iceberg.rest-catalog.security=SIGV4
+    iceberg.rest-catalog.vended-credentials-enabled=true
+    iceberg.unique-table-location=true
+    iceberg.rest-catalog.signing-name=s3tables
+    iceberg.rest-catalog.view-endpoints-enabled=true
+    iceberg.add-files-procedure.enabled=true
+    iceberg.expire-snapshots.min-retention=5d
+    iceberg.remove-orphan-files.min-retention=5d
+    fs.native-s3.enabled=true
+    s3.region=local
+    s3.aws-access-key=
+    s3.aws-secret-key=
+    s3.endpoint=http://minio:80
+    s3.path-style-access=true
+    fs.hadoop.enabled=false
+# catalogs -- Configure
+# [catalogs](https://trino.io/docs/current/installation/deployment.html#catalog-properties).
+# @raw
+# Example:
+# ```yaml
+#  objectstore: |
+#    connector.name=iceberg
+#    iceberg.catalog.type=glue
+#  jmx: |
+#    connector.name=memory
+#  memory: |
+#    connector.name=memory
+#    memory.max-data-per-node=128MB
+# ```
+# Supports templating with `tpl`.
