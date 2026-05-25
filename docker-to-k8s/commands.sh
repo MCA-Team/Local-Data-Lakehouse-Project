@@ -38,3 +38,13 @@ helm uninstall <release-name>
 
 # Upgrade a Helm release with new values
 helm upgrade <release-name> <helm-chart-repo-name> -f <updated-helm-chart-values-file.yaml>
+
+# Show all added Helm Chart repo
+helm search repo
+
+# Show all installed Helm Chart
+helm list
+
+# Get Kubernetes PVs and PVCs
+kubectl get pv
+kubectl get pvc
