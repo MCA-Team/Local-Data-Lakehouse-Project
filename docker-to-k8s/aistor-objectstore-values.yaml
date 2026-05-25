@@ -13,3 +13,9 @@ objectStore:
       console:
          serviceType: NodePort
          nodePort: 31200 # Select an available NodePort in the supported range of 30000-32767
+  
+   certificates:
+      # Enable automatic Kubernetes based `certificate generation and signing <https://kubernetes.io/docs/tasks/tls/managing-tls-in-a-cluster>`__
+      # With disableAutoCert: false (default), AIStor will create a Certificate resource and a corresponding CertificateSigningRequest (CSR) for each server, and the Kubernetes controller will automatically sign the CSRs using the cluster's CA. This is the recommended option for production environments as it provides secure, automatically managed certificates.
+      # With disableAutoCert: true, AIStor will not create any Certificate resources
+      disableAutoCert: true
