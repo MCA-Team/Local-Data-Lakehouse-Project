@@ -1,0 +1,22 @@
+---
+# Source: trino/templates/configmap-catalog.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: release-name-trino-catalog
+  namespace: default
+  labels:
+    helm.sh/chart: trino-1.42.2
+    app.kubernetes.io/name: trino
+    app.kubernetes.io/instance: release-name
+    app.kubernetes.io/version: "480"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: catalogs
+data:
+  tpcds.properties: |
+    connector.name=tpcds
+    tpcds.splits-per-node=4
+    
+  tpch.properties: |
+    connector.name=tpch
+    tpch.splits-per-node=4
