@@ -37,7 +37,7 @@ For this migration, the following tools are required:
 
 # Setting up
 We have to deploy each architecture component one ny one. They are:
-- **[-] MinIO AIStor**
+- **[] MinIO AIStor**
 - **[] Trino**
 - **[] Hue**
 - **[] Superset**
@@ -63,9 +63,20 @@ We have to deploy each architecture component one ny one. They are:
     ```bash
     helm repo add trino https://trinodb.github.io/charts
     ```
-    2. Then, tweak the `trino-values.yaml` file in order to customize your Trino deployment (a full version of `trino-values.yaml` file is available in the `values-templates/trino-template-values.yaml` file). The following command deploys a Trino with the name of **trino** :
+    2. Then, tweak the `trino-values.yaml` file in order to customize your Trino deployment (a full version of `trino-values.yaml` file is available in the `values-templates/trino-template-values.yaml` file). The following command deploys a Trino server with the name of **trino** :
     ```bash
     helm install trino trino/trino -f trino-values.yaml
+    ```
+    Make sure everything is running well.
+
+    ## Hue
+    1. Let's add Hue's Helm repo
+    ```bash
+    helm repo add gethue https://helm.gethue.com
+    ```
+    2. Then, tweak the `hue-values.yaml` file in order to customize your Trino deployment (a full version of `hue-values.yaml` file is available in the `values-templates/hue-template-values.yaml` file). The following command deploys a Hue server with the name of **hue** :
+    ```bash
+    helm install hue gethue/hue -f hue-values.yaml
     ```
     Make sure everything is running well.
 
