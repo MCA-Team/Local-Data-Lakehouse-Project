@@ -8,7 +8,7 @@ hue:
   database:
     create: true
     persist: true
-    engine: "sqlite3"
+    engine: "postgresql_psycopg2"
     host: "postgres-hue"
     port: 5432
     user: "hue"
@@ -21,9 +21,14 @@ hue:
       name = postgresql
       interface=sqlalchemy
       options='{"url": "postgresql://hue:hue@postgres-hue:5432/hue"}'
+    [[[trino]]]
+      name=Trino
+      interface=trino
+      options='{"url": "http://trino:8080/minio_warehouse/"}'
   ini: |
     [desktop]
-    secret_key=
+    use_storage_connectors=true
+    secret_key=123key
     http_host=0.0.0.0
     http_port=8888
     time_zone=Europe/Paris
@@ -37,9 +42,9 @@ hue:
             auth_type=key
             endpoint=http://minio:80
             # MinIO Access ID (Username)
-            access_key_id=minio
+            access_key_id=
             # MinIO Secret Key (Password)
-            secret_key=minio123
+            secret_key=
             options={"signature_version": "s3v4"}
 
     [notebook]
@@ -49,11 +54,7 @@ hue:
         enable_notebook_2=true
 
         [[interpreters]]
-            [[[trino]]]
-                name=Trino
-                interface=trino
-                # (SQLAchemy interface) options format: trino://user@host:port/catalog/schema
-                options='{"url": "http://trino:8080/test-warehouse/"}'
+            
 
 
     [dashboard]
