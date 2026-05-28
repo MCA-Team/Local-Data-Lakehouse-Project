@@ -461,7 +461,7 @@ services:
 
 
   hue:
-    image: gethue/hue:latest
+    image: gethue/hue:20260212-140101
     container_name: hue-ui
     ports:
       - "8888:8888"
