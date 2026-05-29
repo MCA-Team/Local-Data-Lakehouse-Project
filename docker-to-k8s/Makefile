@@ -15,7 +15,8 @@ add-helm-repos: ## Adds all required Helm repos (MinIO AIStor, Trino, ...)
 
 install-minio-charts: ## Automatically installs MinIO AIStor charts (aistor-operator and aistor-objectstore charts) and deploy a server
 	@echo "=========== Installation of aistor-operator charts ==========="
-	@helm install minio-operator minio/aistor-operator --set license="xxxxxx"
+
+	@helm install minio-operator minio/aistor-operator --set license=$$(cat ../minio-volumes/minio.license)
 	@sleep 2
 	@echo "=========== Done ! ===========\n"
 	
