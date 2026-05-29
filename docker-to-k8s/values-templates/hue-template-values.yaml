@@ -2,6 +2,8 @@ image:
    registry: "gethue"
    tag: "latest"
    pullPolicy: "Always"
+postgres:
+   imageVersion: 15
 hue:
   replicas: 2
   database:
@@ -15,6 +17,7 @@ hue:
     #password_script=echo ${DATABASE_PASSWORD}
     name: "hue"
     storageName: "microk8s-hostpath"
+  aws: false
   interpreters: |
     [[[postgresql]]]
       name = postgresql
