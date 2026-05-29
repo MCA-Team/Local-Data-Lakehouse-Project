@@ -17,6 +17,9 @@ fullnameOverride:
 coordinatorNameOverride:
 workerNameOverride:
 
+image:
+  # -- Image tag, defaults to the Trino release version specified as `appVersion` from Chart.yaml
+  tag: "479"
 
 server:
   workers: 2
