@@ -1,5 +1,4 @@
----
-# Source: hue/templates/service-postgres.yaml
+{{- if .Values.hue.database.create -}}
 apiVersion: v1
 kind: Service
 metadata:
@@ -11,3 +10,4 @@ spec:
   type: NodePort
   selector:
     app: postgres-hue
+{{- end -}}

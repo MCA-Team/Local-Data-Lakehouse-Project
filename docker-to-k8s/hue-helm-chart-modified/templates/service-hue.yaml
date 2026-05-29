@@ -1,5 +1,3 @@
----
-# Source: hue/templates/service-hue.yaml
 apiVersion: v1
 kind: Service
 metadata:

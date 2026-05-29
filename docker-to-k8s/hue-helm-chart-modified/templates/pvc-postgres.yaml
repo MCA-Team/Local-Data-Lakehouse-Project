@@ -1,13 +1,13 @@
----
-# Source: hue/templates/pvc-postgres.yaml
+{{- if and .Values.hue.database.persist .Values.hue.database.create -}}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: postgres-pvc
 spec:
-  storageClassName: microk8s-hostpath
+  storageClassName: {{ .Values.hue.database.storageName }}
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
       storage: 2Gi
+{{- end -}}

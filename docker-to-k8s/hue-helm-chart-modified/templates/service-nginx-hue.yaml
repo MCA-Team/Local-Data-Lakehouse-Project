@@ -1,5 +1,4 @@
----
-# Source: hue/templates/service-nginx-hue.yaml
+{{- if .Values.balancer.enabled -}}
 apiVersion: v1
 kind: Service
 metadata:
@@ -17,3 +16,5 @@ spec:
     - protocol: TCP
       port: 80
       targetPort: 80
+      nodePort: 31300
+{{- end -}}

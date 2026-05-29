@@ -1,4 +1,4 @@
-# From docker-compose to Kubernetes depployment
+# From docker-compose to Kubernetes deployment
 
 <image src="../doc/migration.png" width=1000 center>
 
@@ -36,50 +36,84 @@ For this migration, the following tools are required:
 - **Helm**: It is the package manager for Kubernetes.
 
 # Setting up
+
 We have to deploy each architecture component one ny one. They are:
-- **[] MinIO AIStor**
-- **[] Trino**
-- **[] Hue**
-- **[] Superset**
 
-    ## MinIO AIStor
-    1. Let's add MinIO AIStor's Helm repo
-    ```bash
-    helm repo add minio https://helm.min.io/
-    ```
+- **MinIO AIStor**
+- **Trino**
+- **Hue**
+- **Apache Superset**
 
-    2. The `minio/aistor-operator` chart contains the necessary Kubernetes resources for deploying MinIO AIStor Server resources through the `minio/aistor-objectstore` chart. Let's install the `minio/aistor-operator` chart (replace **'xxxxx'** by the content of the `minio.license` file):
-    ```bash
-    helm install aistor minio/aistor-operator --set license="xxxxx"
-    ```
+First of all, add all required Helm CHart repo through the following command:
 
-    3. Make sure everything is running well. Then, tweak the `aistor-objectstore-values.yaml` file in order to customize your MinIO AIStor deployment (a full version of `aistor-objectstore-values.yaml` file is available in the `values-templates/aistor-objectstore-template-values.yaml` file). The following command deploys an MinIO AIStor with the name of **minio-object-store** :
-    ```bash
-    helm install minio-object-store minio/aistor-objectstore -f aistor-objectstore-values.yaml
-    ```
+```bash
+make add-helm-repos 
+```
 
-    ## Trino
-    1. Let's add Trino's Helm repo
-    ```bash
-    helm repo add trino https://trinodb.github.io/charts
-    ```
-    2. Then, tweak the `trino-values.yaml` file in order to customize your Trino deployment (a full version of `trino-values.yaml` file is available in the `values-templates/trino-template-values.yaml` file). The following command deploys a Trino server with the name of **trino** :
-    ```bash
-    helm install trino trino/trino -f trino-values.yaml
-    ```
-    Make sure everything is running well.
+Check the added repo with the following command:
 
-    ## Hue
-    1. Let's add Hue's Helm repo
-    ```bash
-    helm repo add gethue https://helm.gethue.com
-    ```
-    2. Then, tweak the `hue-values.yaml` file in order to customize your Trino deployment (a full version of `hue-values.yaml` file is available in the `values-templates/hue-template-values.yaml` file). The following command deploys a Hue server with the name of **hue** :
-    ```bash
-    helm install hue gethue/hue -f hue-values.yaml
-    ```
-    Make sure everything is running well.
+```
+helm search repo
+```
+    
+## MinIO AIStor
 
+The `minio/aistor-operator` chart contains the necessary Kubernetes resources for deploying MinIO AIStor Server resources through the `minio/aistor-objectstore` chart. Before installing the `minio/aistor-operator` chart, make sure you have the `minio.license` file within the `../minio-volumes` directory. After that, tweak the `aistor-objectstore-values.yaml` file in order to customize your MinIO AIStor deployment (a full version of `aistor-objectstore-values.yaml` file is available in the `values-templates/aistor-objectstore-template-values.yaml` file). The following command deploys an MinIO AIStor with the name of **minio-object-store** :
+
+```bash
+make install-minio-charts
+```
+
+## Trino
+
+Tweak the `trino-values.yaml` file in order to customize your Trino deployment (a full version of `trino-values.yaml` file is available in the `values-templates/trino-template-values.yaml` file). The following command deploys a Trino server with the name of **trino** :
+
+```bash
+make install-trino-charts
+```
+
+Make sure everything is running well.
+
+## Hue
+
+Hue Helm chart needed a customization in order to fulfill our project requirements and constraints. So a modified version (hue-helm-chart-modified/) is the one we will use for the Kubernetes deployment. Then, no need to pull a remote repo.
+Tweak the `hue-values.yaml` file in order to customize your Hue deployment (a full version of `hue-values.yaml` file is available in the `values-templates/hue-template-values.yaml` file). The following command deploys a Hue server with the name of **hue** :
+
+```bash
+make install-hue-modified-charts
+```
+
+Make sure everything is running well.
+
+## Apache Superset
+
+
+## Web UI addresses
+We are using Minikube as a Kubernetes cluster. Some services are exposed through a nodePort. Here are the main containers Web UI addresses:
+
+Here are the main containers Web UI addresses:
+Address     | Container/service
+----------- | ---------
+http://{kubernetes-cluster-ip-address}:31000 | MinIO AIStor Console UI
+http://{kubernetes-cluster-ip-address}:31205 | Trino Web UI
+http://{kubernetes-cluster-ip-address}:31300 | Hue Web UI
+
+## Uninstall the charts
+
+- MinIO charts
+```bash
+make uninstall-minio-charts
+```
+
+- Trino charts
+```bash
+make uninstall-trino-charts
+```
+
+- Hue charts
+```bash
+make uninstall-hue-modified-charts
+```
 
 
 
