@@ -95,7 +95,7 @@ Here are the main containers Web UI addresses:
 Address     | Container/service
 ----------- | ---------
 http://{kubernetes-cluster-ip-address}:31000 | MinIO AIStor Console UI
-http://{kubernetes-cluster-ip-address}:32 | Trino Web UI
+http://{kubernetes-cluster-ip-address}:31205 | Trino Web UI
 http://{kubernetes-cluster-ip-address}:31300 | Hue Web UI
 
 ## Uninstall the charts
