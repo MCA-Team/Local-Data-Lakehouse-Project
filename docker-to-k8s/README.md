@@ -58,10 +58,16 @@ helm search repo
     
 ## MinIO AIStor
 
-The `minio/aistor-operator` chart contains the necessary Kubernetes resources for deploying MinIO AIStor Server resources through the `minio/aistor-objectstore` chart. Before installing the `minio/aistor-operator` chart, make sure you have the `minio.license` file within the `../minio-volumes` directory. After that, tweak the `aistor-objectstore-values.yaml` file in order to customize your MinIO AIStor deployment (a full version of `aistor-objectstore-values.yaml` file is available in the `values-templates/aistor-objectstore-template-values.yaml` file). The following command deploys an MinIO AIStor with the name of **minio-object-store** :
+The `minio/aistor-operator` chart contains the necessary Kubernetes resources for deploying MinIO AIStor Server resources through the `minio/aistor-objectstore` chart. Before installing the `minio/aistor-operator` chart, make sure you have the `minio.license` file within the `../minio-volumes` directory. After that, tweak the `aistor-objectstore-values.yaml` file in order to customize your MinIO AIStor deployment (a full version of `aistor-objectstore-values.yaml` file is available in the `values-templates/aistor-objectstore-template-values.yaml` file). The following command deploys an MinIO AIStor Operator with the name of **minio-object-store** :
 
 ```bash
-make install-minio-charts
+make install-minio-operator-charts
+```
+
+Wait and make sure the `minio-operator` is running well. Then, Execute the following command:
+
+```bash
+make install-minio-objectstore-charts
 ```
 
 ## Trino
@@ -87,32 +93,44 @@ Make sure everything is running well.
 
 ## Apache Superset
 
+Apache Superset provides a BI feature. The user can perform some SQL queries on the Iceberg table and figure out some dashboards based on the data. Tweak the `superset-values.yaml` file in order to customize your Superset deployment (a full version of `superset-values.yaml` file is available in the `values-templates/superset-template-values.yaml` file). The following command deploys a Superset stack (Postgres metadata DB, Redis caching DB and Superset workers and masters) with the name of **superset** :
+
+```bash
+make install-superset-charts
+```
+
 
 ## Web UI addresses
 We are using Minikube as a Kubernetes cluster. Some services are exposed through a nodePort. Here are the main containers Web UI addresses:
 
 Here are the main containers Web UI addresses:
-Address     | Container/service
+Address     | k8s service
 ----------- | ---------
 http://{kubernetes-cluster-ip-address}:31000 | MinIO AIStor Console UI
 http://{kubernetes-cluster-ip-address}:31205 | Trino Web UI
 http://{kubernetes-cluster-ip-address}:31300 | Hue Web UI
+http://{kubernetes-cluster-ip-address}:31800 | Superset Web UI
 
-## Uninstall the charts
+## Uninstall the helm releases
 
-- MinIO charts
+- MinIO helm releases
 ```bash
 make uninstall-minio-charts
 ```
 
-- Trino charts
+- Trino helm releases
 ```bash
 make uninstall-trino-charts
 ```
 
-- Hue charts
+- Hue helm releases
 ```bash
 make uninstall-hue-modified-charts
+```
+
+- Superset helm releases
+```bash
+make uninstall-superset-charts
 ```
 
 
