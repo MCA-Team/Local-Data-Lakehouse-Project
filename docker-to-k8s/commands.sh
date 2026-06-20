@@ -16,6 +16,9 @@ helm repo add trino https://trinodb.github.io/charts
 # Add Hue repo
 helm repo add gethue https://helm.gethue.com
 
+# Add Superset repo
+helm repo add superset https://apache.github.io/superset
+
 
 
 #====================================
