@@ -48,6 +48,9 @@ helm search repo
 # Show all installed Helm Chart
 helm list
 
+# Pull a Chart to targ.gz format
+helm pull <repo>/<chart>
+
 # Get Kubernetes PVs and PVCs
 kubectl get pv
 kubectl get pvc
