@@ -433,3 +433,7 @@ Trino docs: [click here](https://trino.io/docs/current/overview.html)
 Hue docs: [click here](https://docs.gethue.com/quickstart/)
 
 dbt docs: [click here](https://docs.getdbt.com/docs/get-started-dbt?version=1.12)
+
+Helm docs: [click here](https://helm.sh/docs)
+
+Kubernetes docs: [click here](https://kubernetes.io/docs/home/)
