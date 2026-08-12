@@ -1,0 +1,84 @@
+.
+├── airflow-volumes/
+│   ├── airflow_core_variables.env
+│   ├── airflow_metadata_postgres_variables.env
+│   ├── config/
+│   ├── dags/
+│   │   ├── include/
+│   │   │   └── sql/
+│   │   │       └── sales_elt/
+│   │   │           ├── create_bronze_iceberg_table_schema.sql
+│   │   │           └── create_bronze_iceberg_table.sql
+│   │   ├── sales_ELT_DAG.py
+│   │   └── utilities/
+│   │       ├── __init__.py
+│   │       └── sales_elt/
+│   │           ├── __init__.py
+│   │           ├── sales_elt_config.toml
+│   │           └── sales_elt_functions.py
+│   ├── logs/
+│   ├── metadata-postgres-volume/
+│   ├── plugins/
+│   └── test_dbt/
+│       ├── analyses/
+│       ├── dbt_profiles/
+│       │   └── profiles.yml
+│       ├── dbt_project.yml
+│       ├── logs/
+│       ├── macros/
+│       ├── models/
+│       │   ├── gold/
+│       │   │   ├── gold_table.sql
+│       │   │   └── schema.yml
+│       │   └── silver/
+│       │       ├── schema.yml
+│       │       ├── silver_table.sql
+│       │       └── sources.yml
+│       ├── README.md
+│       ├── seeds/
+│       ├── snapshots/
+│       ├── target/
+│       └── tests/
+├── data/
+├── doc/
+├── docker-compose.yaml
+├── dockerfile.airflow
+├── docker-secrets/
+│   ├── airflow/
+│   │   ├── airflow_metadata_postgres_password.secrets
+│   │   ├── airflow_sql_alchemy_connection_string.secrets
+│   │   └── airflow_www_user_password.secrets
+│   ├── minio/
+│   │   └── minio_root_passwd.secrets
+│   └── superset/
+│       ├── superset_admin_password.secrets
+│       └── superset_postgres_password.secrets
+├── hue-volumes/
+│   └── hue.ini
+├── LICENSE
+├── Makefile
+├── minio-volumes/
+│   ├── certs/
+│   ├── data/
+│   ├── minio.license
+│   └── minio_variables.env
+├── README.md
+├── requirements.txt
+├── superset-volumes/
+│   ├── cache-redis-volume/
+│   ├── docker-bootstrap.sh
+│   ├── docker-entrypoint-initdb.d/
+│   │   ├── cypress-init.sh
+│   │   └── examples-init.sh
+│   ├── docker-init.sh
+│   ├── metadata-postgres-volume/
+│   ├── pythonpath_dev/
+│   │   ├── superset_config_local.example
+│   │   └── superset_config.py
+│   ├── requirements-local.txt
+│   ├── superset_core_variables.env
+│   ├── superset_home/
+│   └── superset_metadata_postgres_variables.env
+└── trino-volumes/
+    └── catalog/
+        └── minio_warehouse.properties

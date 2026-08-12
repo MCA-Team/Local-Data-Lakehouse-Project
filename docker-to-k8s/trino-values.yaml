@@ -46,8 +46,8 @@ catalogs:
     iceberg.remove-orphan-files.min-retention=5d
     fs.native-s3.enabled=true
     s3.region=local
-    s3.aws-access-key=
-    s3.aws-secret-key=
+    s3.aws-access-key=minio
+    s3.aws-secret-key=minio123
     s3.endpoint=http://minio:80
     s3.path-style-access=true
     fs.hadoop.enabled=false
