@@ -51,6 +51,9 @@ helm list
 # Pull a Chart to targ.gz format
 helm pull <repo>/<chart>
 
+# Package a helm chart to a tgz format
+helm package <repo>/chart --destination <destination_directory>
+
 # Get Kubernetes PVs and PVCs
 kubectl get pv
 kubectl get pvc
