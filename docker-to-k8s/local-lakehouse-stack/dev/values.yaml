@@ -87,3 +87,34 @@ hue-modified:
       broker_url=redis://redis:6379/0
       result_cache='{"BACKEND": "django_redis.cache.RedisCache", "LOCATION": "redis://redis:6379/0", "OPTIONS": {"CLIENT_CLASS": "django_redis.client.DefaultClient"},"KEY_PREFIX": "queries"}'
       celery_result_backend=redis://redis:6379/0
+
+aistor-operator:
+  enabled: true
+  license: "eyJhbGciOiJFUzM4NCIsInR5cCI6IkpXVCJ9.eyJhaWQiOjAsImNhcCI6MCwiaWF0IjoxLjc2Nzk1NzM0NDI2OTY4NjkyOGU5LCJpc3MiOiJzdWJuZXRAbWluLmlvIiwibGlkIjoiMmJlYmI5ZWItOGY5OC00MDMwLWE5ZmQtZWZiZjJhNWYwMzMxIiwib3JnIjoiIiwicGxhbiI6IkZSRUUiLCJzdWIiOiJnb2xkbWFsY29tNDNAZ21haWwuY29tIiwidHJpYWwiOmZhbHNlfQ.b5k7L_KUf9Y0RhTUH-RKxCITrTLvep07NFG_1Sw9q6Iv05nt8tGjqM5xujPwR67lBsAill_PHueA0peoVrcIGHDcT_srdT_0rDZ1zQcwhbXFBXSlzw0Da8ki5SDBZnqS"
+
+aistor-objectstore:
+  enabled: true
+
+  objectStore:
+    name: minio-object-store # name of the AIStor Server
+    pools:
+    - name: pool-0
+      servers: 1 # Number of servers/pods to deploy (1 for free licenses, more for paid licenses)
+      volumesPerServer: 1 # Number of Persistent Volumes per Server/Pod
+      size: 2Gi # Size of each PV
+  #    storageClassName: directpv-min-io # Storage Class assigned to each PV
+    services:
+        minio:
+          serviceType: NodePort
+          nodePort: 31000 # Select an available NodePort in the supported range of 30000-32767
+        console:
+          serviceType: NodePort
+          nodePort: 31200 # Select an available NodePort in the supported range of 30000-32767
+    
+    certificates:
+        # Enable automatic Kubernetes based `certificate generation and signing <https://kubernetes.io/docs/tasks/tls/managing-tls-in-a-cluster>`__
+        # With disableAutoCert: false (default), AIStor will create a Certificate resource and a corresponding CertificateSigningRequest (CSR) for each server, and the Kubernetes controller will automatically sign the CSRs using the cluster's CA. This is the recommended option for production environments as it provides secure, automatically managed certificates.
+        # With disableAutoCert: true, AIStor will not create any Certificate resources
+        disableAutoCert: true
+
+
