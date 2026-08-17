@@ -1,0 +1,16 @@
+apiVersion: v2
+description: Helm chart for MinIO AIStor Object Store
+home: https://min.io
+icon: https://helm.min.io/logo.png
+keywords:
+- storage
+- object-storage
+- S3
+maintainers:
+- email: dev@minio.io
+  name: MinIO, Inc
+name: aistor-objectstore
+sources:
+- https://github.com/minio/aistor
+type: application
+version: 1.0.16

@@ -1,0 +1,151 @@
+{{- if include "aistor.webhookEnabled" . }}
+{{- $emptyObj := "{}" | fromJson }}
+{{- $operators := .Values.operators | default $emptyObj }}
+{{- $objectStore := index $operators "object-store" | default $emptyObj }}
+{{- $webhook := index $objectStore "webhook" | default $emptyObj -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: object-store-webhook
+  namespace: {{ include "aistor.namespace" . }}
+  annotations:
+    aistor.min.io/authors: MinIO, Inc.
+    aistor.min.io/license: Enterprise
+    aistor.min.io/support: https://subnet.min.io
+    aistor.min.io/version: RELEASE.2026-07-16T23-53-30Z
+    {{- if $.Values.annotations }}
+    {{ $.Values.annotations | toYaml | nindent 4 }}
+    {{- end }}
+  labels:
+    aistor.min.io/name: object-store-webhook
+    {{- if .Values.labels }}
+    {{ .Values.labels | toYaml | nindent 4 }}
+    {{- end }}
+spec:
+  replicas: {{ $webhook.replicas | default 1 }}
+  selector:
+    matchLabels:
+      aistor.min.io/name: object-store-webhook
+      {{- $podLabels := default $.Values.global.operator.podLabels .podLabels }}
+      {{- if $podLabels }}
+      {{- toYaml $podLabels | nindent 6 }}
+      {{- end }}
+  # Use Recreate to avoid scheduling issues when anti-affinity doesn't allow to run
+  # multiple pods on the same node. See: https://github.com/miniohq/aistor-operator/issues/1384
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations:
+        aistor.min.io/authors: MinIO, Inc.
+        aistor.min.io/license: Enterprise
+        aistor.min.io/support: https://subnet.min.io
+        aistor.min.io/version: RELEASE.2026-07-16T23-53-30Z
+        {{- $podAnnotations := default $.Values.global.operator.podAnnotations .podAnnotations }}
+        {{- if $podAnnotations }}
+        {{- toYaml $podAnnotations | nindent 8 }}
+        {{- end }}
+      labels:
+        aistor.min.io/name: object-store-webhook
+        {{- $podLabels := default $.Values.global.operator.podLabels .podLabels }}
+        {{- if $podLabels }}
+        {{- toYaml $podLabels | nindent 8 }}
+        {{- end }}
+    spec:
+      affinity:
+        {{- with $webhook.affinity }}
+        {{- toYaml . | nindent 8 }}
+        {{- else }}
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: aistor.min.io/name
+                operator: In
+                values:
+                - object-store-webhook
+            topologyKey: kubernetes.io/hostname
+        {{- end }}
+      automountServiceAccountToken: true
+      serviceAccountName: object-store-webhook
+      {{- $defaultImagePullSecrets := include "aistor.resolveImagePullSecrets" (dict "name" "operator" "root" $.Values) | fromJsonArray }}
+      {{- $imagePullSecrets := .imagePullSecrets | default $.Values.global.operator.imagePullSecrets | default $defaultImagePullSecrets }}
+      {{- if $imagePullSecrets }}
+      imagePullSecrets:
+        {{- $imagePullSecrets | toYaml | nindent 8 }}
+      {{- end }}
+      {{- if not (include "aistor.isOpenShift" $) }}
+      {{- with default $.Values.global.operator.podSecurityContext .podSecurityContext }}
+      securityContext:
+      {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- else }}
+      securityContext: {}
+      {{- end }}
+      containers:
+        - name: controller
+          image: "{{ include "aistor.resolveImage" (dict "name" "operator" "root" $.Values "val" $objectStore) }}"
+          {{- $imagePullPolicy := .imagePullPolicy | default $.Values.global.operator.imagePullPolicy | default (include "aistor.resolveImagePullPolicy" (dict "name" "operator" "root" $.Values "val" .)) }}
+          {{- if $imagePullPolicy }}
+          imagePullPolicy: {{ $imagePullPolicy }}
+          {{- end }}
+          args:
+            - pod-mutating-webhook
+            - -v
+            - "2"
+          {{- $watchedNamespaces := include "aistor.watchedNamespaces" (dict "operator" "object-store" "root" $.Values) | fromJsonArray }}
+          {{- if or $watchedNamespaces $webhook.extraEnv }}
+          env:
+            {{- if $watchedNamespaces }}
+            - name: WATCHED_NAMESPACES
+              value: {{ $watchedNamespaces | join "," | quote }}
+            {{- end }}
+            {{- with $webhook.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- end }}
+          ports:
+            - containerPort: 8443
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8443
+              scheme: HTTPS
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8443
+              scheme: HTTPS
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 3
+          {{- $resources := default $.Values.global.operator.resources .resources }}
+          {{- if $resources }}
+          resources:
+            {{- toYaml $resources | nindent 12 }}
+          {{- end }}
+          {{- if not (include "aistor.isOpenShift" $) }}
+          {{- $securityContext := default $.Values.global.operator.securityContext .securityContext }}
+          {{- if $securityContext }}
+          securityContext:
+          {{- toYaml $securityContext | nindent 12 }}
+          {{- end }}
+          {{- end }}
+          {{- if and (include "aistor.isOpenShift" $) (not (include "aistor.webhookUsesCustomCert" $)) }}
+          volumeMounts:
+            - name: tls
+              mountPath: /tmp/object-store-webhook
+              readOnly: true
+          {{- end }}
+      {{- if and (include "aistor.isOpenShift" $) (not (include "aistor.webhookUsesCustomCert" $)) }}
+      volumes:
+        - name: tls
+          secret:
+            secretName: object-store-webhook-service-cert
+      {{- end }}
+{{- end }}

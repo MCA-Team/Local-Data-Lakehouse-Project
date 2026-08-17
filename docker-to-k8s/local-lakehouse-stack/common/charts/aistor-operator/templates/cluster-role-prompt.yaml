@@ -1,0 +1,73 @@
+{{- if (include "aistor.operatorEnabled" (dict "operator" "prompt" "root" $.Values)) }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: aistor-prompt
+  annotations:
+    aistor.min.io/authors: MinIO, Inc.
+    aistor.min.io/license: Enterprise
+    aistor.min.io/support: https://subnet.min.io
+    aistor.min.io/version: RELEASE.2026-07-16T23-53-30Z
+    {{- if $.Values.annotations }}
+    {{ $.Values.annotations | toYaml | nindent 4 }}
+    {{- end }}
+  {{- if $.Values.labels }}
+  labels:
+    {{ $.Values.labels | toYaml | nindent 4 }}
+  {{- end }}
+rules:
+  ### Standard operator permissions
+  
+  # Allow the operator to manage events for logging and debugging
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+
+
+  ### Operator permissions for managing Prompt components
+
+  # Monitor Prompt resources
+  - apiGroups: ["aistor.min.io"]
+    resources: ["prompts"]
+    verbs: ["get", "list", "watch"]
+
+  # Allow updating the status of Prompt resources
+  - apiGroups: ["aistor.min.io"]
+    resources: ["prompts/status"]
+    verbs: ["update"]
+
+  # Allow updating finalizers (required by blockOwnerDeletion in owner references)
+  - apiGroups: ["aistor.min.io"]
+    resources: ["prompts/finalizers"]
+    verbs: ["update"]
+
+  # Monitor ObjectStore resources
+  - apiGroups: ["aistor.min.io"]
+    resources: ["objectstores"]
+    verbs: ["get", "list", "watch"]
+
+  # Monitor configuration maps
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]
+
+  # Manage secrets
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create", "delete", "get", "list", "update", "watch"]
+    
+  # Manage deployments
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["create", "list", "update", "watch"]
+
+  # Manage services
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["create", "list", "update", "watch"]
+
+  # Manage pods
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["list", "watch"]
+{{- end }}

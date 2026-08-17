@@ -1,0 +1,227 @@
+{{- range $op, $int := include "aistor.operators" . | fromYaml }}
+{{- $emptyObj := "{}" | fromJson -}}
+{{- $operators := $.Values.operators | default $emptyObj -}}
+{{- $opValue := index $operators $op | default $emptyObj }}
+{{- with $opValue }}
+{{- if not .disabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $op }}-operator
+  namespace: {{ include "aistor.namespace" $ }}
+  annotations:
+    aistor.min.io/authors: MinIO, Inc.
+    aistor.min.io/license: Enterprise
+    aistor.min.io/support: https://subnet.min.io
+    aistor.min.io/version: RELEASE.2026-07-16T23-53-30Z
+    {{- if $.Values.annotations }}
+    {{ $.Values.annotations | toYaml | nindent 4 }}
+    {{- end }}
+  {{- if $.Values.labels }}
+  labels:
+    {{ $.Values.labels | toYaml | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: {{ .replicas | default $.Values.global.operator.replicas | default 1 }}
+  selector:
+    matchLabels:
+      aistor.min.io/name: {{ $op }}-operator
+      {{- $podLabels := default $.Values.global.operator.podLabels .podLabels }}
+      {{- if $podLabels }}
+      {{- toYaml $podLabels | nindent 6 }}
+      {{- end }}
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations:
+        aistor.min.io/authors: MinIO, Inc.
+        aistor.min.io/license: Enterprise
+        aistor.min.io/support: https://subnet.min.io
+        aistor.min.io/version: RELEASE.2026-07-16T23-53-30Z
+        {{- $podAnnotations := default $.Values.global.operator.podAnnotations .podAnnotations }}
+        {{- with $podAnnotations }}
+        {{- toYaml $podAnnotations | nindent 8 }}
+        {{- end }}
+      labels:
+        aistor.min.io/name: {{ $op }}-operator
+        {{- $podLabels := default $.Values.global.operator.podLabels .podLabels }}
+        {{- if $podLabels }}
+        {{- toYaml $podLabels | nindent 8 }}
+        {{- end }}
+    spec:
+      affinity:
+        {{- with .affinity }}
+        {{- toYaml . | nindent 8 }}
+        {{- else }}
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: aistor.min.io/name
+                operator: In
+                values:
+                - {{ $op }}-operator
+            topologyKey: kubernetes.io/hostname
+        {{- end }}
+      {{- $podTolerations := default $.Values.global.operator.tolerations .tolerations }}
+      {{- if $podTolerations }}
+      tolerations:
+      {{- toYaml $podTolerations | nindent 6 }}
+      {{- end }}
+      {{- $nodeSelector := default $.Values.global.operator.nodeSelector .nodeSelector }}
+      {{- if $nodeSelector }}
+      nodeSelector:
+      {{- toYaml $nodeSelector | nindent 8 }}
+      {{- end }}
+      containers:
+      - args:
+        - {{ $op }}
+        - -license
+        - /tmp/license/minio.license
+        env:
+        - name: POD_NODENAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        {{- if $.Values.global.clusterDomain }}
+        - name: CLUSTER_DOMAIN
+          value: {{ $.Values.global.clusterDomain | quote }}
+        {{- end }}
+        {{- if has $op (list "object-store") }}
+        - name: TOKEN_VALIDATION
+          value: {{ include "aistor.tokenValidation" $ }}
+        {{- if not $.Values.global.removeHelmChartVersion }}
+        - name: OPERATOR_HELM_CHART_VERSION
+          value: {{ printf "%s-%s" $.Chart.Name $.Chart.Version | quote }}
+        {{- end }}
+        {{- end }}
+        {{- $watchedNamespaces := include "aistor.watchedNamespaces" (dict "operator" $op "root" $.Values) | fromJsonArray }}
+        {{- if $watchedNamespaces }}
+        - name: WATCHED_NAMESPACES
+          value: {{ $watchedNamespaces | join "," | quote }}
+        {{- end }}
+        {{- with $int.extraEnv }}
+        {{- . | toYaml | nindent 8 }}
+        {{- end }}
+        {{- if .extraEnv }}
+        {{- with .extraEnv }}
+        {{- . | toYaml | nindent 8 }}
+        {{- end }}
+        {{- else }}
+        {{- with $.Values.global.operator.extraEnv }}
+        {{- . | toYaml | nindent 8 }}
+        {{- end }}
+        {{- end }}
+        image: "{{ include "aistor.resolveImage" (dict "name" "operator" "root" $.Values "val" .) }}"
+        {{- $imagePullPolicy := .imagePullPolicy | default $.Values.global.operator.imagePullPolicy | default (include "aistor.resolveImagePullPolicy" (dict "name" "operator" "root" $.Values "val" .)) }}
+        {{- if $imagePullPolicy }}
+        imagePullPolicy: {{ $imagePullPolicy }}
+        {{- end }}
+        name: controller
+        {{- $resources := default $.Values.global.operator.resources .resources }}
+        {{- if $resources }}
+        resources:
+        {{- toYaml $resources | nindent 10 }}
+        {{- end }}
+        {{- if not (include "aistor.isOpenShift" $) }}
+        {{- $securityContext := default $.Values.global.operator.securityContext .securityContext }}
+        {{- if $securityContext }}
+        securityContext:
+        {{- toYaml $securityContext | nindent 10 }}
+        {{- end }}
+        {{- end }}
+        volumeMounts:
+        {{- if include "aistor.isOpenShift" $ }}
+        - mountPath: /tmp/service-ca
+          name: openshift-service-ca
+        - mountPath: /tmp/csr-signer-ca
+          name: openshift-csr-signer-ca
+        {{- if has $op (list "object-store") }}
+        - mountPath: /tmp/object-store-operator
+          name: object-store-operator-tls
+        {{- end }}
+        {{- end }}
+        - mountPath: /tmp/license
+          name: minio-license
+        {{- if has $op (list "aihub" "object-store") }}
+        - name: minio-token-volume
+          mountPath: /var/run/secrets/sts.min.io
+          readOnly: true
+        {{- end }}
+      {{- $defaultImagePullSecrets := include "aistor.resolveImagePullSecrets" (dict "name" "operator" "root" $.Values) | fromJsonArray }}
+      {{- $imagePullSecrets := .imagePullSecrets | default $.Values.global.operator.imagePullSecrets | default $defaultImagePullSecrets }}
+      {{- if $imagePullSecrets }}
+      imagePullSecrets:
+        {{- $imagePullSecrets | toYaml | nindent 8 }}
+      {{- end }}
+      {{- if not (include "aistor.isOpenShift" $) }}
+      {{- with default $.Values.global.operator.podSecurityContext .podSecurityContext }}
+      securityContext:
+      {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- else }}
+      securityContext: {}
+      {{- end }}
+      automountServiceAccountToken: true
+      serviceAccountName: {{ $op }}
+      volumes:
+      {{- if include "aistor.isOpenShift" $ }}
+      {{- if has $op (list "object-store") }}
+      - name: object-store-operator-tls
+        projected:
+          defaultMode: 420
+          sources:
+            - secret:
+                name: object-store-operator-tls
+                items:
+                  - key: tls.crt
+                    path: public.crt
+                  - key: tls.key
+                    path: private.key
+                optional: true
+      {{- end }}
+      - name: openshift-service-ca
+        configMap:
+          name: openshift-service-ca.crt
+          items:
+            - key: service-ca.crt
+              path: service-ca.crt
+          optional: true
+      - name: openshift-csr-signer-ca
+        projected:
+          defaultMode: 420
+          sources:
+            - secret:
+                name: openshift-csr-signer-ca
+                items:
+                  - key: tls.crt
+                    path: tls.crt
+                optional: true
+      {{- end }}
+      - name: minio-license
+        secret:
+          defaultMode: 444
+          optional: true
+          secretName: minio-license
+      {{- if has $op (list "aihub" "object-store") }}
+      - name: minio-token-volume
+        projected:
+          sources:
+          - serviceAccountToken:
+              path: token
+              audience: sts.min.io
+              expirationSeconds: 3600
+      {{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

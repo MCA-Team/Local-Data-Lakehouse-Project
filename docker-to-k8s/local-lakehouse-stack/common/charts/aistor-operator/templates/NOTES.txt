@@ -1,0 +1,54 @@
+Thank you for installing AIStor Operators {{ .Chart.AppVersion }}. Your release
+is named "{{ .Release.Name }}".
+
+The following operators have been installed:
+{{- $ops := include "aistor.operators" . | fromYaml }}
+{{- range $op, $int := $ops }}
+{{- $emptyObj := "{}" | fromJson -}}
+{{- $operators := $.Values.operators | default $emptyObj -}}
+{{- $opValue := index $operators $op | default $emptyObj }}
+{{- if not $opValue.disabled }}
+- {{ $op }}-operator
+{{- end }}
+{{- end }}
+{{ if eq (include "aistor.operatorEnabled" (dict "root" .Values "operator" "aihub")) "true" }}
+DEPRECATION: the aihub controller is deprecated and will be removed in a
+             future release. Set `operators.aihub.disabled: true` to silence
+             this warning.
+{{- end }}
+{{- if eq (include "aistor.operatorEnabled" (dict "root" .Values "operator" "prompt")) "true" }}
+DEPRECATION: the prompt controller is deprecated and will be removed in a
+             future release. Set `operators.prompt.disabled: true` to silence
+             this warning.
+{{- end }}
+{{ if $.Values.license | default $.Values.global.license }}
+A license has been installed.
+{{ if $.Values.global.license }}
+DEPRECATION: Make sure you set `.license` instead of `.global.license`. The last
+             field has been deprecated since June 2025.
+{{- end }}
+{{- else }}
+{{- if hasKey ((lookup "v1" "Secret" .Release.Namespace "minio-license").data | default dict) "minio.license" }}
+An existing license secret has been found.
+{{- else }}
+No license information was supplied, so AIStor object stores will fail to
+initialize. Create a secret named `minio-license` with a key named `minio.license`
+that holds the proper license. The license will automatically be picked up
+by the operators and propagated to the object stores.
+{{- end }}
+{{- end }}
+
+Image list:
+{{- $image := include "aistor.resolveImage" (dict "name" "operator" "root" $.Values "val" $.Values) }}
+{{ printf "- operator: %s" $image }}
+{{- range $op, $int := include "aistor.operators" . | fromYaml }}
+{{- $emptyObj := "{}" | fromJson -}}
+{{- $operators := $.Values.operators | default $emptyObj -}}
+{{- $opValue := index $operators $op | default $emptyObj }}
+{{- if not $opValue.disabled }}
+{{- range $img := $int.images }}
+{{- $image := include "aistor.resolveImage" (dict "name" $img "root" $.Values "val" $.Values) }}
+{{ printf "- %s: %s" $img $image }}
+{{- end }}
+{{- end }}
+{{- end }}

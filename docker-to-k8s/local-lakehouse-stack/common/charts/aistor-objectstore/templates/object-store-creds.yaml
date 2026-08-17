@@ -1,0 +1,35 @@
+{{- $secretConfigName := include "aistor.configSecretName" .Values }}
+
+{{- if not $secretConfigName }}
+
+{{- if not .Values.secrets }}
+{{- fail "secrets is required when secrets.name is not set" }}
+{{- end }}
+{{- if not .Values.secrets.accessKey }}
+{{- fail ".secrets.accessKey is required (no default credentials are shipped)" }}
+{{- end }}
+{{- if not .Values.secrets.secretKey }}
+{{- fail ".secrets.secretKey is required (no default credentials are shipped)" }}
+{{- end }}
+{{- if and (eq .Values.secrets.accessKey "minio") (eq .Values.secrets.secretKey "minio123") }}
+{{- fail ".secrets.accessKey/secretKey must not be the well-known weak pair 'minio'/'minio123'" }}
+{{- end }}
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ printf "%s-root-creds" .Values.objectStore.name | quote }}
+  namespace: {{ $.Values.namespaceOverride | default $.Release.Namespace | quote }}
+  {{- if $.Values.annotations }}
+  annotations:
+    {{ $.Values.annotations | toYaml | nindent 4 }}
+  {{- end }}
+  {{- if $.Values.labels }}
+  labels:
+    {{- $.Values.labels | toYaml | nindent 4 }}
+  {{- end }}
+type: Opaque
+data:
+  MINIO_ROOT_USER: {{ .Values.secrets.accessKey | b64enc | quote }}
+  MINIO_ROOT_PASSWORD: {{ .Values.secrets.secretKey | b64enc | quote }}
+{{- end }}

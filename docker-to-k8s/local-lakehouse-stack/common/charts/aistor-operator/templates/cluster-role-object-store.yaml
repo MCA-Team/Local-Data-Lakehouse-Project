@@ -1,0 +1,146 @@
+{{- if (include "aistor.operatorEnabled" (dict "operator" "object-store" "root" $.Values)) }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: aistor-object-store
+  annotations:
+    aistor.min.io/authors: MinIO, Inc.
+    aistor.min.io/license: Enterprise
+    aistor.min.io/support: https://subnet.min.io
+    aistor.min.io/version: RELEASE.2026-07-16T23-53-30Z
+    {{- if $.Values.annotations }}
+    {{ $.Values.annotations | toYaml | nindent 4 }}
+    {{- end }}
+  {{- if $.Values.labels }}
+  labels:
+    {{ $.Values.labels | toYaml | nindent 4 }}
+  {{- end }}
+rules:
+  ### Standard operator permissions
+  
+  # Allow the operator to manage events for logging and debugging
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+
+
+  ### Operator permissions for managing ObjectStore components
+
+  # Monitor ObjectStore resources
+  - apiGroups: ["aistor.min.io"]
+    resources: ["objectstores"]
+    verbs: ["get", "list", "watch"]
+
+  # Allow updating the status of ObjectStore resources
+  - apiGroups: ["aistor.min.io"]
+    resources: ["objectstores/status"]
+    verbs: ["update"]
+
+  # Allow updating finalizers (required by blockOwnerDeletion in owner references)
+  - apiGroups: ["aistor.min.io"]
+    resources: ["objectstores/finalizers"]
+    verbs: ["update"]
+
+  # Monitor Prompt resources
+  - apiGroups: ["aistor.min.io"]
+    resources: ["prompts"]
+    verbs: ["get", "list", "watch"]
+
+  # Monitor configuration maps
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]
+
+  # Manage secrets
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create", "delete", "get", "list", "update", "watch"]
+
+  # Manage PVCs
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["list", "update"]
+
+  # Manage statefulsets (for MinIO pools)
+  - apiGroups: ["apps"]
+    resources: ["statefulsets"]
+    verbs: ["create", "delete", "list", "patch", "update", "watch"]
+  
+  # Allow updating finalizers (required by blockOwnerDeletion in owner references)
+  - apiGroups: ["apps"]
+    resources: ["statefulsets/finalizers"]
+    verbs: ["update"]
+
+  # Manage deployments (for KES)
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["create", "list", "update", "watch"]
+
+  # Monitor pods and actively delete pods (during upgrades)
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["delete", "deletecollection", "list", "watch"]
+
+  # Manage services
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["create", "delete", "list", "update", "watch"]
+
+  # Manage Prometheus resource
+  - apiGroups: ["monitoring.coreos.com"]
+    resources: ["prometheuses"]
+    verbs: ["get", "list", "update", "watch"]
+
+  # Manage pod disruption budgets
+  - apiGroups: ["policy"]
+    resources: ["poddisruptionbudgets"]
+    verbs: ["create", "list", "update", "watch"]
+
+  # Monitor CRDs (to check if Prompt is installed)
+  - apiGroups: ["apiextensions.k8s.io"]
+    resources: ["customresourcedefinitions"]
+    verbs: ["get"]
+
+  # Operator needs to access node to fetch platform and determine EKS
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list"]
+
+
+  ### Service account, RBAC and MinIO policy management
+
+  # Service accounts
+  - apiGroups: [""]
+    resources: ["serviceaccounts"]
+    verbs: ["create", "list", "update", "watch"]
+
+  # RBAC roles and bindings
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["rolebindings"]
+    verbs: ["create", "delete", "list", "update", "watch"]
+
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["clusterroles"]
+    resourceNames: ["aistor-object-store-pods"]
+    verbs: ["bind"]
+
+  # MinIO policy bindings
+  - apiGroups: ["sts.min.io"]
+    resources: ["policybindings"]
+    verbs: ["create", "list", "update", "watch"]
+
+{{- if eq (include "aistor.tokenValidation" $) "TokenReview" }}
+  ### Token validation (TokenReview mode)
+
+  # Manage cluster role bindings
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["clusterrolebindings"]
+    verbs: ["create", "delete", "get", "update"]
+
+  # Allow the operator to bind the token-review cluster role
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["clusterroles"]
+    resourceNames: ["aistor-tokenreview"]
+    verbs: ["bind"]
+{{- end }}
+{{- end }}

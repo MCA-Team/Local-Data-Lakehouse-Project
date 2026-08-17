@@ -1,0 +1,292 @@
+{{- $secretConfigName := include "aistor.configSecretName" .Values }}
+
+{{- with .Values.objectStore }}
+{{- if .legacyAudience }}
+  {{- fail ".objectStore.legacyAudience is deprecated, please make sure you use latest AIStor version and remove this value" }}
+{{- end }}
+{{- with .features }}
+  {{- if .bucketDNS }}
+  {{- fail ".objectStore.features.bucketDNS is deprecated, please set the env variable MINIO_DOMAIN instead." }}
+  {{- end }}
+  {{- if .domains }}
+  {{- fail ".objectStore.features.domains is deprecated, please set the env variable MINIO_BROWSER_REDIRECT_URL instead." }}
+  {{- end }}
+  {{- if .enableSFTP }}
+  {{- fail ".objectStore.features.enableSFTP is deprecated, please set objectStore.sftp instead." }}
+  {{- end }}
+{{- end }}
+
+{{- $secretCredsName := "" }}
+{{- if not $secretConfigName }}
+{{- $secretCredsName = printf "%s-root-creds" .name -}}
+{{- end }}
+
+apiVersion: aistor.min.io/v1
+kind: ObjectStore
+metadata:
+  name: {{ .name }}
+  namespace: {{ $.Values.namespaceOverride | default $.Release.Namespace | quote }}
+  ## Optionally pass labels to be applied to the statefulset pods
+  labels:
+    app: minio
+    {{- if $.Values.labels -}}
+    {{ $.Values.labels | toYaml | nindent 4 }}
+    {{- end }}
+  {{- $metricsEnabled := dig "metrics" "enabled" false . }}
+  {{- $annotations := $.Values.annotations }}
+  annotations:
+    aistor.min.io/helm-chart-version: "{{ $.Chart.Name }}-{{ $.Chart.Version }}"
+    {{- if $annotations }}
+    {{ $annotations | toYaml | nindent 4 }}
+    {{- end }}
+    {{- if $metricsEnabled }}
+    prometheus.io/path: /minio/v2/metrics/cluster
+    prometheus.io/port: {{ dig "metrics" "port" 9000 . | quote }}
+    prometheus.io/scrape: "true"
+    prometheus.io/scheme: {{ dig "metrics" "protocol" "http" . | quote }}
+    {{- end }}
+{{- if dig "scheduler" "name" "" . }}
+scheduler:
+  name: {{ dig "scheduler" "name" "" . }}
+{{- end }}
+spec:
+  {{- if .image }}
+  {{- $repository := .image.repository }}
+  {{- $tag := .image.digest | default .image.tag }}
+  {{- if or (and $repository (not $tag)) (and (not $repository) $tag) }}
+  {{- fail "Both repository and tag / digest must be set" }}
+  {{- end }}
+  {{- if (and $repository $tag) }}
+  image: "{{ $repository }}:{{ $tag }}"
+  {{- end }}
+  imagePullPolicy: {{ dig "image" "pullPolicy" "IfNotPresent" . }}
+  {{- end }}
+  {{- if dig "imagePullSecret" "name" "" . }}
+  imagePullSecret:
+    name: {{ dig "imagePullSecret" "name" "" . }}
+  {{- end }}
+  ## Secret with default environment variable configurations
+  {{- if $secretConfigName }}
+  configuration:
+    name: {{ $secretConfigName }}
+  {{- end }}
+  pools:
+    {{- range (dig "pools" (list) .) }}
+    - servers: {{ dig "servers" 4 . }}
+      {{- with (dig "name" "" .) }}
+      name: {{ . }}
+      {{- end }}
+      volumesPerServer: {{ dig "volumesPerServer" 4 . }}
+      {{- if dig "runtimeClassName" "" . }}
+      runtimeClassName: {{ dig "runtimeClassName" "" . }}
+      {{- end }}
+      volumeClaimTemplate:
+        metadata:
+        {{- if ne .storageNamePrefix "" }}
+          name: {{ .storageNamePrefix | default "data" | quote }}
+        {{- end }}
+        {{- with (dig "storageAnnotations" (dict) .) }}
+          annotations: {{- toYaml . | nindent 12 }}
+        {{- end }}
+        spec:
+          {{- if dig "storageClassName" "" . }}
+          storageClassName: {{ dig "storageClassName" "" . }}
+          {{- end }}
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: {{ dig "size" "10Gi" . }}
+      {{- with (dig "annotations" (dict) .) }}
+      annotations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with (dig "labels" (dict) .) }}
+      labels: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with (dig "tolerations" (list) .) }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with (dig "nodeSelector" (dict) .) }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with (dig "affinity" (dict) .) }}
+      affinity: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with (dig "resources" (dict) .) }}
+      resources: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .securityContext }}
+      securityContext: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .containerSecurityContext }}
+      containerSecurityContext: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with (dig "topologySpreadConstraints" (list) .) }}
+      topologySpreadConstraints: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if hasKey . "spreadZoneConfig" }}
+      spreadZoneConfig: {{- if eq (len .spreadZoneConfig) 0 }} { } {{- end }}
+      {{- with (dig "spreadZoneConfig" (dict) .) }}
+      {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- end }}
+    {{- end }}
+  mountPath: {{ dig "mountPath" "/export" . | quote }}
+  {{- with .subPath }}
+  subPath: {{ . | quote }}
+  {{- end }}
+  {{- if dig "certificates" "" . }}
+  certificates:
+    disableAutoCert: {{ dig "certificates" "disableAutoCert" false . }}
+    {{- if ((.certificates).certExpiryAlertThreshold) }}
+    certExpiryAlertThreshold: {{ ((.certificates).certExpiryAlertThreshold) }}
+    {{- end }}
+    {{- with (dig "certificates" "config" (dict) .) }}
+    config: {{- toYaml . | nindent 6 }}
+    {{- end }}
+    {{- with (dig "certificates" "trustedCAs" (list) .) }}
+    trustedCAs: {{- toYaml . | nindent 6 }}
+    {{- end }}
+    {{- with (dig "certificates" "server" (list) .) }}
+    server: {{- toYaml . | nindent 6 }}
+    {{- end }}
+    {{- with (dig "certificates" "KESClient" (list) .) }}
+    KESClient: {{ ((.certificates).KESClient) }}
+    {{- end }}
+    {{- with (dig "certificates" "client" (dict) .) }}
+    client: {{- toYaml . | nindent 6 }}
+    {{- end }}
+  {{- end }}
+  {{- with (dig "sftp" (dict) .) }}
+  sftp: {{- toYaml . | nindent 4 }}
+  {{- end }}
+  podManagementPolicy: {{ dig "podManagementPolicy" "Parallel" . }}
+  {{- if dig "rollingTimeoutSeconds" "" . }}
+  rollingTimeoutSeconds: {{ dig "rollingTimeoutSeconds" "" . }}
+  {{- end }}
+  {{- with (dig "readiness" (dict) .) }}
+  readiness: {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with (dig "liveness" (dict) .) }}
+  liveness: {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with (dig "startup" (dict) .) }}
+  startup: {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with (dig "lifecycle" (dict) .) }}
+  lifecycle: {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with (dig "services" (dict) .) }}
+  services: {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- if dig "serviceAccountName" "" . }}
+  serviceAccountName: {{ dig "serviceAccountName" "" . }}
+  {{- end }}
+  {{- if dig "pvcProtection" true . }}
+  pvcProtection: true
+  {{- end }}
+  {{- if dig "disablePodDisruptionBudget" false . }}
+  disablePodDisruptionBudget: true
+  {{- end }}
+  prometheusOperator: {{ dig "prometheusOperator" "false" . }}
+  {{- with (dig "prometheusOperatorScrapeMetricsPaths" (list) .) }}
+  prometheusOperatorScrapeMetricsPaths: {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with (dig "logging" (dict) .) }}
+  logging: {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- if (or .env (or $secretCredsName $.Values.secrets.disableRoot)) }}
+  env:
+    {{- with .env }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    {{- if $secretCredsName }}
+    - name: MINIO_ROOT_USER
+      valueFrom:
+        secretKeyRef:
+          name: {{ $secretCredsName | quote }}
+          key: MINIO_ROOT_USER
+    - name: MINIO_ROOT_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: {{ $secretCredsName | quote }}
+          key: MINIO_ROOT_PASSWORD
+    {{- end }}
+    {{- if $.Values.secrets.disableRoot }}
+    - name: MINIO_API_ROOT_ACCESS
+      value: "off"
+    {{- end }}
+  {{- end }}
+  {{- if dig "priorityClassName" "" . }}
+  priorityClassName: {{ dig "priorityClassName" "" . }}
+  {{- end }}
+  {{- with (dig "initContainers" (list) .) }}
+  initContainers: {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with (dig "sideCars" (dict) .) }}
+  sideCars: {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with (dig "additionalVolumes" (list) .) }}
+  additionalVolumes: {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with (dig "additionalVolumeMounts" (list) .) }}
+  additionalVolumeMounts: {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- if dig "kes" "configuration" false . }}
+  kes:
+    {{- if .kes.image }}
+    {{-  $kesRepository := .kes.image.repository }}
+    {{- $kesTag := .kes.image.digest | default .kes.image.tag }}
+    {{- if or (and $kesRepository (not $kesTag)) (and (not $kesRepository) $kesTag) }}
+    {{- fail "Both repository and tag / digest must be set" }}
+    {{- end }}
+    {{- if (and $kesRepository $kesTag) }}
+    image: "{{ $kesRepository }}:{{ $kesTag }}"
+    {{- end }}
+    {{- end }}
+    {{- with (dig "kes" "env" (list) .) }}
+    env: {{- toYaml . | nindent 4 }}
+    {{- end }}
+    replicas: {{ .kes.replicas | int }}
+    kesSecret:
+      name: "kes-configuration"
+    imagePullPolicy: {{ .kes.imagePullPolicy | quote }}
+    {{- with (dig "kes" "externalCertSecret" (dict) .) }}
+    externalCertSecret: {{- toYaml . | nindent 6 }}
+    {{- end }}
+    {{- with (dig "kes" "clientCertSecret" (dict) .) }}
+    clientCertSecret: {{- toYaml . | nindent 6 }}
+    {{- end }}
+    {{- with (dig "kes" "trustedCAs" (dict) .) }}
+    trustedCAs: {{- toYaml . | nindent 6 }}
+    {{- end }}
+    ## Key name to be created on the KMS, default is "my-minio-key"
+    keyName: {{ .kes.keyName | quote }}
+    {{- with (dig "kes" "resources" (dict) .) }}
+    resources: {{- toYaml . | nindent 6 }}
+    {{- end }}
+    {{- with (dig "kes" "nodeSelector" (dict) .) }}
+    nodeSelector: {{- toYaml . | nindent 6 }}
+    {{- end }}
+    {{- with (dig "kes" "affinity" (dict) .) }}
+    affinity: {{- toYaml . | nindent 6 }}
+    {{- end }}
+    {{- with (dig "kes" "tolerations" (list) .) }}
+    tolerations: {{- toYaml . | nindent 6 }}
+    {{- end }}
+    {{- with (dig "kes" "annotations" (dict) .) }}
+    annotations: {{- toYaml . | nindent 6 }}
+    {{- end }}
+    {{- with (dig "kes" "labels" (dict) .) }}
+    labels: {{- toYaml . | nindent 6 }}
+    {{- end }}
+    serviceAccountName: {{ .kes.serviceAccountName | quote }}
+    {{- with .kes.securityContext }}
+    securityContext: {{- toYaml . | nindent 6 }}
+    {{- end }}
+    {{- with .kes.containerSecurityContext }}
+    containerSecurityContext:
+    {{- toYaml . | nindent 6 }}
+    {{- end }}
+  {{- end }}
+{{- end }}
