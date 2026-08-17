@@ -18,3 +18,13 @@ dependencies:
     version: "1.0.3"
     repository: "file://../common/charts/hue-modified"
     condition: hue-modified.enabled
+
+  - name: aistor-operator
+    version: "5.9.0"
+    repository: "file://../common/charts/aistor-operator"
+    condition: aistor-operator.enabled
+
+  - name: aistor-objectstore
+    version: "1.0.16"
+    repository: "file://../common/charts/aistor-objectstore"
+    condition: aistor-objectstore.enabled
