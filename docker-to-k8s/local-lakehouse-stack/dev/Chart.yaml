@@ -28,3 +28,8 @@ dependencies:
     version: "1.0.16"
     repository: "file://../common/charts/aistor-objectstore"
     condition: aistor-objectstore.enabled
+
+  - name: superset
+    version: "0.21.1"
+    repository: "file://../common/charts/superset"
+    condition: superset.enabled

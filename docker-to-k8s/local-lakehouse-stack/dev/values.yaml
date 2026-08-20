@@ -95,6 +95,12 @@ aistor-operator:
 aistor-objectstore:
   enabled: true
 
+  secrets:
+    name: myminio-env-configuration
+    accessKey: "minio"
+    secretKey: "123"
+    disableRoot: false    # Set to `true` to disable root user access for increased security
+
   objectStore:
     name: minio-object-store # name of the AIStor Server
     pools:
@@ -118,3 +124,24 @@ aistor-objectstore:
         disableAutoCert: true
 
 
+superset:
+  enabled: true
+
+  service:
+    type: NodePort
+    port: 8088
+    annotations: {}
+      # cloud.google.com/load-balancer-type: "Internal"
+    loadBalancerIP: ~
+    nodePort:
+      # -- (int)
+      http: 31800
+    
+  configOverrides:
+    secret: |
+      SECRET_KEY = 'zCUyFvnM9NT2W8awcgUwhKbiOGZ+uFAHncFgMO/cBnLHk0m/hgBeBtQt'
+
+  bootstrapScript: |
+    #!/bin/bash
+    uv pip install .[postgres] .[trino] &&\
+    if [ ! -f ~/bootstrap ]; then echo "Running Superset with uid {{ .Values.runAsUser }}" > ~/bootstrap; fi
