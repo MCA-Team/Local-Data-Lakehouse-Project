@@ -1,0 +1,69 @@
+{{- if include "aistor.webhookEnabled" . }}
+{{- $emptyObj := "{}" | fromJson }}
+{{- $operators := .Values.operators | default $emptyObj }}
+{{- $objectStore := index $operators "object-store" | default $emptyObj }}
+{{- $webhook := index $objectStore "webhook" | default $emptyObj }}
+{{- if and (include "aistor.webhookUsesCustomCert" $) (not $webhook.caBundle) }}
+{{- fail "operators.object-store.webhook.caBundle is required when WEBHOOK_CUSTOM_TLS_SECRET_NAME is set: the apiserver needs the issuing CA to trust the webhook serving certificate" }}
+{{- end }}
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: object-store-operator-webhook
+  annotations:
+    aistor.min.io/authors: MinIO, Inc.
+    aistor.min.io/license: Enterprise
+    aistor.min.io/support: https://subnet.min.io
+    aistor.min.io/version: RELEASE.2026-07-16T23-53-30Z
+    {{- if and (include "aistor.isOpenShift" $) (not (include "aistor.webhookUsesCustomCert" $)) }}
+    service.beta.openshift.io/inject-cabundle: "true"
+    {{- end }}
+    {{- if $.Values.annotations }}
+    {{ $.Values.annotations | toYaml | nindent 4 }}
+    {{- end }}
+  {{- if .Values.labels }}
+  labels:
+    {{ .Values.labels | toYaml | nindent 4 }}
+  {{- end }}
+webhooks:
+  - name: objectstore-rack-selector.min.io
+    admissionReviewVersions: ["v1"]
+    sideEffects: "NoneOnDryRun"
+    timeoutSeconds: 10
+    failurePolicy: "Fail"
+    reinvocationPolicy: "IfNeeded"
+    matchPolicy: "Exact"
+    rules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        resources: ["pods"]
+        operations: ["CREATE"]
+        scope: "*"
+    clientConfig:
+      caBundle: {{ $webhook.caBundle | default "" | quote }}
+      service:
+        name: object-store-webhook
+        namespace: {{ include "aistor.namespace" . }}
+        path: /mutate
+        port: 8443
+    objectSelector:
+      matchExpressions:
+        - key: aistor.min.io/objectStore
+          operator: Exists
+        - key: aistor.min.io/spreadZoneAware
+          operator: In
+          values: ["true"]
+        - key: v1.min.io/pool
+          operator: Exists
+    {{- $watchedNamespaces := include "aistor.watchedNamespaces" (dict "operator" "object-store" "root" $.Values) | fromJsonArray }}
+    {{- if $watchedNamespaces }}
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values:
+          {{- range $ns := $watchedNamespaces }}
+            - {{ $ns }}
+          {{- end }}
+    {{- end }}
+{{- end }}

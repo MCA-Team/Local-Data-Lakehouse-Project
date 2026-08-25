@@ -1,0 +1,63 @@
+{{- range $op, $int := include "aistor.operators" . | fromYaml }}
+{{- $emptyObj := "{}" | fromJson -}}
+{{- $operators := $.Values.operators | default $emptyObj -}}
+{{- $opValue := index $operators $op | default $emptyObj }}
+{{- if not $opValue.disabled }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $op }}-operator
+  namespace: {{ include "aistor.namespace" $ }}
+  annotations:
+    aistor.min.io/authors: MinIO, Inc.
+    aistor.min.io/license: Enterprise
+    aistor.min.io/support: https://subnet.min.io
+    aistor.min.io/version: RELEASE.2026-07-16T23-53-30Z
+    {{- if $.Values.annotations }}
+    {{ $.Values.annotations | toYaml | nindent 4 }}
+    {{- end }}
+  {{- if $.Values.labels }}
+  labels:
+    {{ $.Values.labels | toYaml | nindent 4 }}
+  {{- end }}
+rules:
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["create", "get", "update"]
+
+  # Self-pod patch for leader-election label
+  - apiGroups: [""]
+    resources: ["pods"]
+    {{- if eq $op "object-store" }}
+    # object-store reads its own operator pod to report image in deployment metadata
+    verbs: ["get", "patch"]
+    {{- else }}
+    verbs: ["patch"]
+    {{- end }}
+
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]
+
+  - apiGroups: [""]
+    resources: ["secrets"]
+    {{- if eq $op "object-store" }}
+    # The object-store needs to create/update certificates for the
+    # update server's TLS certificate
+    verbs: ["get", "list", "watch", "delete", "create", "update"]
+    {{- else }}
+    verbs: ["get", "list", "watch", "delete"]
+    {{- end }}
+
+# Object store operator requires permission to read its
+  # own deployment to act as an owner reference for the
+  # certificates
+  {{- if eq $op "object-store" }}
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get"]
+  {{- end }}
+
+{{- end }}
+{{- end }}

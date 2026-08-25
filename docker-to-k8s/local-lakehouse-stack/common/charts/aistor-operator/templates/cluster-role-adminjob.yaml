@@ -1,0 +1,63 @@
+{{- if (include "aistor.operatorEnabled" (dict "operator" "adminjob" "root" $.Values)) }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: aistor-adminjob
+  annotations:
+    aistor.min.io/authors: MinIO, Inc.
+    aistor.min.io/license: Enterprise
+    aistor.min.io/support: https://subnet.min.io
+    aistor.min.io/version: RELEASE.2026-07-16T23-53-30Z
+    {{- if $.Values.annotations }}
+    {{ $.Values.annotations | toYaml | nindent 4 }}
+    {{- end }}
+  {{- if $.Values.labels }}
+  labels:
+    {{ $.Values.labels | toYaml | nindent 4 }}
+  {{- end }}
+rules:
+  ### Standard operator permissions
+  
+  # Allow the operator to manage events for logging and debugging
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+
+
+  ### Operator permissions for managing AdminJob components
+
+  # Monitor AdminJob resources
+  - apiGroups: ["aistor.min.io"]
+    resources: ["adminjobs"]
+    verbs: ["delete", "get", "list", "watch"]
+
+  # Allow updating the status of AdminJob resources
+  - apiGroups: ["aistor.min.io"]
+    resources: ["adminjobs/status"]
+    verbs: ["update"]
+
+  # Monitor ObjectStore resources
+  - apiGroups: ["aistor.min.io"]
+    resources: ["objectstores"]
+    verbs: ["get", "list", "watch"]
+
+  # MinIO policy bindings
+  - apiGroups: ["sts.min.io"]
+    resources: ["policybindings"]
+    verbs: ["list", "watch"]
+
+  # Monitor configuration maps
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]
+
+  # Manage secrets
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create", "delete", "get", "list", "update", "watch"]
+
+  # Manage batch jobs
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create", "list", "watch"]
+{{- end }}

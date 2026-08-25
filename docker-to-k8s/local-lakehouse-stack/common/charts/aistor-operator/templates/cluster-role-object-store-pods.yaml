@@ -1,0 +1,28 @@
+{{- if (include "aistor.operatorEnabled" (dict "operator" "object-store" "root" $.Values)) }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: aistor-object-store-pods
+  annotations:
+    aistor.min.io/authors: MinIO, Inc.
+    aistor.min.io/license: Enterprise
+    aistor.min.io/support: https://subnet.min.io
+    aistor.min.io/version: RELEASE.2026-07-16T23-53-30Z
+    {{- if $.Values.annotations }}
+    {{ $.Values.annotations | toYaml | nindent 4 }}
+    {{- end }}
+  {{- if $.Values.labels }}
+  labels:
+    {{ $.Values.labels | toYaml | nindent 4 }}
+  {{- end }}
+rules:
+  # Allow the sidecar to watch secrets
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch"]
+
+  # Allow the MinIO pod to scan the policy-bindings
+  - apiGroups: ["sts.min.io"]
+    resources: ["policybindings"]
+    verbs: ["list"]
+{{- end }}

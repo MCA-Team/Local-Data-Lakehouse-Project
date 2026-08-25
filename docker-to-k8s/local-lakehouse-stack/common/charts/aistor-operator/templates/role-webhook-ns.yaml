@@ -1,0 +1,61 @@
+{{- if include "aistor.webhookEnabled" . }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: object-store-webhook
+  namespace: {{ include "aistor.namespace" . }}
+  annotations:
+    aistor.min.io/authors: MinIO, Inc.
+    aistor.min.io/license: Enterprise
+    aistor.min.io/support: https://subnet.min.io
+    aistor.min.io/version: RELEASE.2026-07-16T23-53-30Z
+    {{- if $.Values.annotations }}
+    {{ $.Values.annotations | toYaml | nindent 4 }}
+    {{- end }}
+  {{- if $.Values.labels }}
+  labels:
+    {{ $.Values.labels | toYaml | nindent 4 }}
+  {{- end }}
+rules:
+  # Monitor configuration maps (the CA bundle lives in the operator namespace)
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]
+
+  # Manage secrets (the TLS certificate is stored as a secret in the operator namespace)
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create", "delete", "get", "list", "update", "watch"]
+
+  # The webhook needs to fetch its own deployment, because it is used
+  # as an owner reference for the TLS secret (certificates)
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: object-store-webhook
+  namespace: {{ include "aistor.namespace" . }}
+  annotations:
+    aistor.min.io/authors: MinIO, Inc.
+    aistor.min.io/license: Enterprise
+    aistor.min.io/support: https://subnet.min.io
+    aistor.min.io/version: RELEASE.2026-07-16T23-53-30Z
+    {{- if $.Values.annotations }}
+    {{ $.Values.annotations | toYaml | nindent 4 }}
+    {{- end }}
+  {{- if $.Values.labels }}
+  labels:
+    {{ $.Values.labels | toYaml | nindent 4 }}
+  {{- end }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: object-store-webhook
+subjects:
+  - kind: ServiceAccount
+    name: object-store-webhook
+    namespace: {{ include "aistor.namespace" . }}
+{{- end }}

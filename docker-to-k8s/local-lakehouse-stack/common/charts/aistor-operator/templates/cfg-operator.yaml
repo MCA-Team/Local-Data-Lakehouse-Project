@@ -1,0 +1,42 @@
+{{- range $op, $int := include "aistor.operators" . | fromYaml }}
+{{- $emptyObj := "{}" | fromJson -}}
+{{- $operators := $.Values.operators | default $emptyObj -}}
+{{- $opValue := index $operators $op | default $emptyObj }}
+{{- $defaultVal := "val: {}" | fromYaml -}}
+{{- if not $opValue.disabled }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $op }}-operator
+  namespace: {{ include "aistor.namespace" $ }}
+  annotations:
+    aistor.min.io/authors: MinIO, Inc.
+    aistor.min.io/license: Enterprise
+    aistor.min.io/support: https://subnet.min.io
+    aistor.min.io/version: RELEASE.2026-07-16T23-53-30Z
+    {{- if $.Values.annotations }}
+    {{ $.Values.annotations | toYaml | nindent 4 }}
+    {{- end }}
+data:
+  {{ range $key := $int.images | default $emptyObj }}
+  {{- $defaultVal := "val: {}" | fromYaml -}}
+  {{- $imagePullPolicy := include "aistor.resolveImagePullPolicy" (dict "name" $key "root" $.Values "val" $defaultVal) -}}
+  {{- $imagePullSecrets := include "aistor.resolveImagePullSecrets" (dict "name" $key "root" $.Values "val" $defaultVal) | fromJsonArray -}}
+  {{- $env := include "aistor.resolveEnv" (dict "name" $key "root" $.Values) | fromJsonArray -}}
+  {{ $key }}: |
+    image: "{{ include "aistor.resolveImage" (dict "name" $key "root" $.Values "val" $defaultVal) }}"
+    {{- if $imagePullPolicy }}
+    imagePullPolicy: "{{ $imagePullPolicy }}"
+    {{- end }}
+    {{- if $imagePullSecrets }}
+    imagePullSecrets:
+    {{- $imagePullSecrets | toYaml | nindent 6 }}
+    {{- end }}
+    {{- if $env }}
+    env:
+    {{- $env | toYaml | nindent 6 }}
+    {{- end }}
+  {{ end }}
+{{- end -}}
+{{- end -}}

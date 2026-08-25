@@ -1,0 +1,41 @@
+{{- if not (include "aistor.isOpenShift" $) }}
+{{- range $op := list "aihub" "object-store" "prompt" "warp" }}
+{{- if (include "aistor.operatorEnabled" (dict "operator" $op "root" $.Values)) }}
+{{- $emptyObj := "{}" | fromJson }}
+{{- $operators := $.Values.operators | default $emptyObj }}
+{{- $opValue := index $operators $op | default $emptyObj }}
+{{- if not ($opValue.optOutAutomaticCertificates | default $.Values.global.operator.optOutAutomaticCertificates | default false) }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: aistor-{{ $op }}-certificate-management
+  annotations:
+    aistor.min.io/authors: MinIO, Inc.
+    aistor.min.io/license: Enterprise
+    aistor.min.io/support: https://subnet.min.io
+    aistor.min.io/version: RELEASE.2026-07-16T23-53-30Z
+    {{- if $.Values.annotations }}
+    {{ $.Values.annotations | toYaml | nindent 4 }}
+    {{- end }}
+  {{- if $.Values.labels }}
+  labels:
+    {{ $.Values.labels | toYaml | nindent 4 }}
+  {{- end }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: aistor-certificate-management
+subjects:
+  - kind: ServiceAccount
+    name: {{ $op }}
+    namespace: {{ include "aistor.namespace" $ }}
+{{- if and (eq $op "object-store") (include "aistor.webhookEnabled" $) }}
+  - kind: ServiceAccount
+    name: object-store-webhook
+    namespace: {{ include "aistor.namespace" $ }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
