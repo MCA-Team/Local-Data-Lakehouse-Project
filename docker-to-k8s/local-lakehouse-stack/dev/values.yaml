@@ -7,6 +7,12 @@ trino:
 
   server:
     workers: 2
+    config:
+      authenticationType: PASSWORD
+
+  auth:
+    passwordAuth: |
+      "test:$2y$10$rl3qNrnXd6GUJfLmc6DSMOfv.0DhcTe577kjbzLTWgzeiVaydEsXy"
 
   catalogs:
     minio_warehouse: |
@@ -32,7 +38,6 @@ trino:
 
   # Allowing the access to Trino web dashboard through 31205 port
   service:
-    annotations: {}
     type: NodePort
     nodePort: "31205"
 
@@ -42,23 +47,10 @@ hue-modified:
   enabled: true
 
   image:
-    registry: "gethue"
-    tag: "latest"
-    pullPolicy: "Always"
+    tag: "20260611-140101"
+    pullPolicy: "IfNotPresent"
 
   hue:
-    replicas: 2
-    database:
-      create: true
-      persist: true
-      engine: "postgresql_psycopg2"
-      host: "postgres-hue"
-      port: 5432
-      user: "hue"
-      password: "hue"
-      #password_script=echo ${DATABASE_PASSWORD}
-      name: "hue"
-      storageName: "microk8s-hostpath"
     interpreters: |
       [[[trino]]]
         name=Trino
@@ -98,7 +90,7 @@ aistor-objectstore:
   secrets:
     name: myminio-env-configuration
     accessKey: "minio"
-    secretKey: "123"
+    secretKey: "airflowpass"
     disableRoot: false    # Set to `true` to disable root user access for increased security
 
   objectStore:
