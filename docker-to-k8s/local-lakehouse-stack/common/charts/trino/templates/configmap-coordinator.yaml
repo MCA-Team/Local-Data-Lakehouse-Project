@@ -63,6 +63,9 @@ data:
     coordinator=true
     node-scheduler.include-coordinator={{ .Values.coordinator.config.nodeScheduler.includeCoordinator }}
     http-server.http.port={{ .Values.service.port }}
+    http-server.https.enabled=true
+    http-server.https.port=8443
+    http-server.https.keystore.path={{ .Values.server.config.path }}/certs/tls-cert.pem
     query.max-memory={{ .Values.server.config.query.maxMemory }}
     query.max-memory-per-node={{ .Values.coordinator.config.query.maxMemoryPerNode }}
     {{- if .Values.coordinator.config.memory.heapHeadroomPerNode }}

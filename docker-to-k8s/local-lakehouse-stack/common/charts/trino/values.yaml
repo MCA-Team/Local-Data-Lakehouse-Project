@@ -800,7 +800,11 @@ coordinator:
   #    subPath: sample.json
   # ```
 
-  secretMounts: []
+  secretMounts:
+    - name: tls-cert
+      secretName: trino-tls-secret
+      path: /etc/trino/certs/tls-cert.pem
+      subPath: tls-cert
   # coordinator.secretMounts -- Allows mounting additional Trino configuration
   # files from Kubernetes secrets on the coordinator node.
   # @raw
