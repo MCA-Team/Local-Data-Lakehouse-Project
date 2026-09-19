@@ -750,7 +750,13 @@ coordinator:
   #   secret-value={{- .Values.someValue }}
   # ```
 
-  additionalVolumes: []
+  additionalVolumes:
+    - name: tls-cert
+      secret:
+        secretName: trino-tls-secret
+        items:
+          - key: tls-cert.pem
+            path: tls-cert.pem
   # coordinator.additionalVolumes -- One or more additional volumes to add to the coordinator.
   # @raw
   # Example:
@@ -759,7 +765,10 @@ coordinator:
   #    emptyDir: {}
   # ```
 
-  additionalVolumeMounts: []
+  additionalVolumeMounts:
+    - name: tls-cert
+      mountPath: /etc/trino/certs
+      readOnly: true
   # coordinator.additionalVolumeMounts -- One or more additional volume mounts to add to the coordinator.
   # @raw
   # Example:
@@ -800,11 +809,7 @@ coordinator:
   #    subPath: sample.json
   # ```
 
-  secretMounts:
-    - name: tls-cert
-      secretName: trino-tls-secret
-      path: /etc/trino/certs/tls-cert.pem
-      subPath: tls-cert
+  secretMounts: []
   # coordinator.secretMounts -- Allows mounting additional Trino configuration
   # files from Kubernetes secrets on the coordinator node.
   # @raw
