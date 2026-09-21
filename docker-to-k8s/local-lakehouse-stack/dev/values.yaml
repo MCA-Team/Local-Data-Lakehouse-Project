@@ -39,19 +39,19 @@ trino:
   # Allowing the access to Trino web dashboard through 31205 port
   service:
     type: NodePort
-    port: 8443
-    nodePort: 30443
+    nodePort: 31205
 
   additionalConfigProperties:
   - internal-communication.shared-secret=E9S2RvGz4zwiyd3Kobr4KWKf4kDAT1EWJKBV+ib3sZtVm4xgDdfNV3vSy4rpgVM248x9fMTstr5zHAQmQvAYMajh56EW7t1+xQox4QbncDZzXeX8X9vFFw0FXyGKX6PSxxewVyWOe4CCW8aC2rDTrL21mTloUiGk0XN4f+3Zu9bjiE+bDM18/noX48E2laVWu1UQEY2AEDQoiyo9vOLZnvSiEqksiz4iqU3vMSIOmbVekfE2v+XQvyvp31GaKvoGl7DB3OSOABvPOFwlYAxNsyTmF4Dk0s8ui6mrrL0vm/guj/FfbzUE3u0M74VUPAjRQ2Vcqv6j1UWd3CQA5cpqhZBElMljozfYciZJEwpwV37sHoD2CjKivskFkmIuhspM4IQT5ZIKnXzrawkOp4a/GIq0feFVZ8sWHB9Z0GTPl36yanO1xXz47YYVEFNmeeBgYfy8Az66UegxFhET2RS2XS3maGoiew67Ge3YByYZzHh0jg9Eb1kTX+/enIYID3PwoJ3lUhLJV9UBJJZ3Dv15CrPNpWxjwvgDXmqVCWmJ9cL0SUL8tZOZDXV5sv9vhFAiT/8yPwXEkG3OHW1T375+Sz3BNHKsTjMbaKE8qhMxVjrbAnsFbtsvXYFr5fvrt1K6DpW3+PdV36DoKwoC+VioWeapMmcOUyt4UFno9TyY+YM=
 
-  additionalExposedPorts:
-    https:
-      servicePort: 8443
-      name: https
-      port: 8443
-      nodePort: 30443
-      protocol: TCP
+  coordinator:
+    additionalExposedPorts:
+      https:
+        servicePort: 8443
+        name: https
+        port: 8443
+        nodePort: 30443
+        protocol: TCP
 
 
 # hue-modified subchart values
