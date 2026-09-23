@@ -12,7 +12,7 @@ trino:
 
   auth:
     passwordAuth: |
-      "test:$2y$10$rl3qNrnXd6GUJfLmc6DSMOfv.0DhcTe577kjbzLTWgzeiVaydEsXy"
+      "test:$2a$12$D.XO1RFKuk9yN7xURHP53eC1JPtSS804HWdRoanNYOAk.kVh.ACFi"
 
   catalogs:
     minio_warehouse: |
