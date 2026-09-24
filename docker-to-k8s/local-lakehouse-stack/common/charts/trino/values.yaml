@@ -52,10 +52,10 @@ server:
   config:
     path: /etc/trino
     https:
-      enabled: false
+      enabled: true
       port: 8443
       keystore:
-        path: ""
+        path: "/etc/trino/certs/tls-cert.pem"
     # -- Trino supports multiple [authentication
     # types](https://trino.io/docs/current/security/authentication-types.html):
     # PASSWORD, CERTIFICATE, OAUTH2, JWT, KERBEROS, HEADER.
